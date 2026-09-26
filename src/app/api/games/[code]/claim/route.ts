@@ -1,7 +1,7 @@
 import { HttpError, currentPlayer, errorResponse, findGame } from "@/lib/auth";
 import { json, str } from "@/lib/body";
 import { get, run, touchGame } from "@/lib/db";
-import { buildPlayerView } from "@/lib/state";
+import { viewForPlayer } from "@/lib/state";
 import type { CharacterRow } from "@/lib/types";
 
 export async function POST(req: Request, ctx: { params: Promise<{ code: string }> }) {
@@ -21,7 +21,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
       run("UPDATE players SET character_id = NULL WHERE id = ?", player.id);
       touchGame(game.id);
       const fresh = { ...player, character_id: null };
-      return Response.json(buildPlayerView(game, fresh));
+      return Response.json(viewForPlayer(game, fresh));
     }
 
     const character = get<CharacterRow>(
@@ -30,9 +30,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
       game.id,
     );
     if (!character) throw new HttpError(404, "Няма такъв герой");
-    if (character.is_victim) {
-      throw new HttpError(409, `„${character.name}“ е убитият — него го играе водещият`);
-    }
 
     const takenBy = get<{ id: string }>(
       "SELECT id FROM players WHERE character_id = ?",
@@ -44,7 +41,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
 
     run("UPDATE players SET character_id = ? WHERE id = ?", characterId, player.id);
     touchGame(game.id);
-    return Response.json(buildPlayerView(game, { ...player, character_id: characterId }));
+    // Picking the victim makes this player the host: they get the host view straight away.
+    return Response.json(viewForPlayer(game, { ...player, character_id: characterId }));
   } catch (e) {
     return errorResponse(e);
   }

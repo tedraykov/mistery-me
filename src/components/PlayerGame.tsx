@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CharacterCard } from "@/components/CharacterCard";
+import { HostDashboard } from "@/components/HostDashboard";
 import { ReadAloud } from "@/components/ReadAloud";
 import { PHASE_LABEL, initial, paragraphs } from "@/lib/format";
 import { mutate, useGameState } from "@/lib/useGameState";
@@ -24,6 +25,9 @@ export function PlayerGame({ code }: { code: string }) {
     );
   }
 
+  // Whoever holds the victim's role runs the game from here.
+  if (state?.view === "host") return <HostDashboard code={code} view={state} apply={apply} />;
+
   if (error || !state || state.view !== "player") {
     return (
       <main className="shell stack center" style={{ paddingTop: 70 }}>
@@ -37,8 +41,6 @@ export function PlayerGame({ code }: { code: string }) {
   }
 
   const v: PlayerView = state;
-  // The victim is the game master's role: listed in the cast, but nobody can pick or accuse them.
-  const pickable = v.cast.filter((c) => !c.isVictim);
 
   async function claim(characterId: string) {
     setBusy(characterId);
@@ -82,11 +84,11 @@ export function PlayerGame({ code }: { code: string }) {
             Избери своя герой. Само ти ще виждаш неговата история, тайна и цел.
           </p>
           {actionError && <div className="alert">{actionError}</div>}
-          {pickable.length === 0 ? (
-            <div className="notice">Водещият още не е добавил герои.</div>
+          {v.cast.length === 0 ? (
+            <div className="notice">Още няма добавени герои.</div>
           ) : (
             <div className="pick">
-              {pickable.map((c) => (
+              {v.cast.map((c) => (
                 <button
                   key={c.id}
                   className="pick-item"
@@ -94,8 +96,11 @@ export function PlayerGame({ code }: { code: string }) {
                   onClick={() => claim(c.id)}
                 >
                   <span className="em">{initial(c.name)}</span>
-                  <span className="nm" style={{ flex: 1 }}>
-                    {c.name}
+                  <span className="stack" style={{ gap: 2, flex: 1 }}>
+                    <span className="nm">{c.name}</span>
+                    {c.isVictim && (
+                      <span className="faint">☠️ Убитият — който го избере, води играта</span>
+                    )}
                   </span>
                   {c.claimed ? (
                     <span className="badge">Заето</span>

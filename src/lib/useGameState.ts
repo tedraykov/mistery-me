@@ -13,15 +13,19 @@ interface Result {
   refresh: () => Promise<void>;
 }
 
-/** Bootstraps a session, then polls for changes so clue drops land on their own. */
-export function useGameState(code: string, pollMs = 3000): Result {
+/**
+ * Bootstraps a session, then polls for changes so phase changes land on their own. `asCreator` is
+ * the creator's setup page — the same browser may also be a player on the game page.
+ */
+export function useGameState(code: string, pollMs = 3000, asCreator = false): Result {
+  const query = asCreator ? "?as=creator" : "";
   const [state, setState] = useState<GameView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const ready = useRef(false);
 
   const refresh = useCallback(async () => {
-    const res = await fetch(`/api/games/${code}/state`, { cache: "no-store" });
+    const res = await fetch(`/api/games/${code}/state${query}`, { cache: "no-store" });
     const data = await res.json();
     if (!res.ok) {
       setError(data.error ?? "Грешка");
@@ -29,13 +33,13 @@ export function useGameState(code: string, pollMs = 3000): Result {
     }
     setError(null);
     setState(data as GameView);
-  }, [code]);
+  }, [code, query]);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const res = await fetch(`/api/games/${code}/session`, {
+      const res = await fetch(`/api/games/${code}/session${query}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{}",
@@ -53,7 +57,7 @@ export function useGameState(code: string, pollMs = 3000): Result {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, query]);
 
   useEffect(() => {
     const tick = () => {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CharacterCard } from "@/components/CharacterCard";
 import { roleMarker, victimClues } from "@/lib/format";
+import { MAX_DESCRIPTION, MAX_FILE_BYTES, nameFromFile, readText } from "@/lib/textFile";
 import type { CharacterRow } from "@/lib/types";
 
 export interface CharacterDraft {
@@ -19,27 +20,6 @@ export const draftFrom = (c: CharacterRow): CharacterDraft => ({
   name: c.name,
   description: c.description,
 });
-
-const MAX_DESCRIPTION = 8000;
-
-/**
- * Read a .txt as text. Files saved on Bulgarian Windows (Notepad, Word "Plain text") are often
- * UTF-16 or Windows-1251 rather than UTF-8, so detect those instead of showing mojibake.
- */
-async function readText(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let text: string;
-  if (bytes[0] === 0xff && bytes[1] === 0xfe) text = new TextDecoder("utf-16le").decode(bytes);
-  else if (bytes[0] === 0xfe && bytes[1] === 0xff) text = new TextDecoder("utf-16be").decode(bytes);
-  else {
-    try {
-      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    } catch {
-      text = new TextDecoder("windows-1251").decode(bytes);
-    }
-  }
-  return text.replace(/\r\n?/g, "\n").trim();
-}
 
 export function CharacterEditor({
   draft,
@@ -67,7 +47,7 @@ export function CharacterEditor({
     const file = e.target.files?.[0];
     e.target.value = ""; // so picking the same file again still fires
     if (!file) return;
-    if (file.size > 1_000_000) {
+    if (file.size > MAX_FILE_BYTES) {
       setFileNote({ ok: false, text: "Файлът е твърде голям." });
       return;
     }
@@ -79,7 +59,7 @@ export function CharacterEditor({
     setDraft({
       ...draft,
       // An empty name is taken from the file name: "Тео.txt" → "Тео".
-      name: draft.name.trim() ? draft.name : file.name.replace(/\.[^.]+$/, "").slice(0, 80),
+      name: draft.name.trim() ? draft.name : nameFromFile(file),
       description: text.slice(0, MAX_DESCRIPTION),
     });
     setFileNote(

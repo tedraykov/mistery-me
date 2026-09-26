@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import {
   CharacterEditor,
@@ -10,20 +9,33 @@ import {
 } from "@/components/CharacterEditor";
 import { CharacterCard } from "@/components/CharacterCard";
 import { ClueTimerPanel } from "@/components/ClueTimer";
-import { ReadAloud } from "@/components/ReadAloud";
-import { PHASE_HINT, PHASE_LABEL, initial, paragraphs } from "@/lib/format";
-import { mutate, useGameState } from "@/lib/useGameState";
-import { PHASES, type GmView, type Phase } from "@/lib/types";
+import { JoinLine, PhaseStepper, type Send } from "@/components/GameChrome";
+import { ImportTxt } from "@/components/ImportTxt";
+import { IntroEditor } from "@/components/IntroEditor";
+import { initial, paragraphs } from "@/lib/format";
+import { mutate } from "@/lib/useGameState";
+import type { GameView, HostView } from "@/lib/types";
 
-type Tab = "intro" | "cast" | "victim" | "solution" | "votes";
+type Tab = "victim" | "cast" | "intro" | "solution" | "votes";
 
-export function GmDashboard({ code }: { code: string }) {
-  const { state, error, loading, apply } = useGameState(code, 4000);
-  const [tab, setTab] = useState<Tab>("cast");
+/**
+ * The player who picked the victim runs the game from here: phases, the clue timer, and every
+ * character's full description — nobody else sees those.
+ */
+export function HostDashboard({
+  code,
+  view: v,
+  apply,
+}: {
+  code: string;
+  view: HostView;
+  apply: (view: GameView) => void;
+}) {
+  const [tab, setTab] = useState<Tab>("victim");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  async function send(path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown) {
+  const send: Send = async (path, method, body) => {
     setBusy(true);
     setActionError(null);
     const res = await mutate(path, method, body);
@@ -31,54 +43,28 @@ export function GmDashboard({ code }: { code: string }) {
     else setActionError(res.error);
     setBusy(false);
     return res.ok;
-  }
-
-  if (loading) {
-    return (
-      <main className="shell center" style={{ paddingTop: 80 }}>
-        <p className="muted">Отваряме случая…</p>
-      </main>
-    );
-  }
-
-  if (error || !state) {
-    return (
-      <main className="shell stack center" style={{ paddingTop: 70 }}>
-        <h1>🔒</h1>
-        <p className="alert">{error ?? "Няма достъп."}</p>
-        <Link href="/" className="btn">
-          Към началото
-        </Link>
-      </main>
-    );
-  }
-
-  if (state.view !== "gm") {
-    return (
-      <main className="shell stack center" style={{ paddingTop: 70 }}>
-        <h1>🔒</h1>
-        <p className="notice">
-          Този браузър не е водещият на играта. Ако си играч, отвори играта като играч.
-        </p>
-        <Link href={`/game/${code}`} className="btn btn-primary">
-          Влез като играч
-        </Link>
-      </main>
-    );
-  }
-
-  const v: GmView = state;
+  };
 
   return (
     <main className="shell shell-wide stack">
-      <GmHeader view={v} busy={busy} send={send} />
+      <header className="stack" style={{ marginTop: 8 }}>
+        <div className="stack-sm">
+          <h1>{v.game.title}</h1>
+          <JoinLine code={code} playerCount={v.playerCount} badge="☠️ Водещ" />
+        </div>
+        <PhaseStepper
+          phase={v.game.phase}
+          busy={busy}
+          onSelect={(phase) => send(`/api/games/${code}`, "PATCH", { phase })}
+        />
+      </header>
 
       <div className="tabs" role="tablist">
         {(
           [
-            ["intro", "Увод"],
-            ["cast", `Герои (${v.characters.length})`],
             ["victim", "☠️ Моята роля"],
+            ["cast", `Герои (${v.characters.length})`],
+            ["intro", "Увод"],
             ["solution", "Решение"],
             ["votes", `Гласове (${v.voterCount})`],
           ] as [Tab, string][]
@@ -99,80 +85,20 @@ export function GmDashboard({ code }: { code: string }) {
 
       {v.timer && <ClueTimerPanel timer={v.timer} busy={busy} send={send} code={code} />}
 
-      {tab === "intro" && <IntroTab view={v} busy={busy} send={send} code={code} />}
-      {tab === "cast" && <CastTab view={v} busy={busy} send={send} code={code} />}
       {tab === "victim" && <VictimTab view={v} />}
+      {tab === "cast" && <CastTab view={v} busy={busy} send={send} code={code} />}
+      {tab === "intro" && (
+        <IntroEditor
+          intro={v.game.intro}
+          introAudio={v.introAudio}
+          tts={v.tts}
+          busy={busy}
+          onSave={(intro) => send(`/api/games/${code}`, "PATCH", { intro })}
+        />
+      )}
       {tab === "solution" && <SolutionTab view={v} busy={busy} send={send} code={code} />}
       {tab === "votes" && <VotesTab view={v} busy={busy} send={send} code={code} />}
     </main>
-  );
-}
-
-type Send = (path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown) => Promise<boolean>;
-
-/* ── Header: code, share link, phase control ───────────────────── */
-function GmHeader({ view, busy, send }: { view: GmView; busy: boolean; send: Send }) {
-  const [copied, setCopied] = useState<string | null>(null);
-  const code = view.game.code;
-  const joinUrl = typeof window === "undefined" ? "" : `${window.location.origin}/game/${code}`;
-
-  async function copy(text: string, what: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(what);
-      setTimeout(() => setCopied(null), 1600);
-    } catch {
-      setCopied(null);
-    }
-  }
-
-  return (
-    <header className="stack" style={{ marginTop: 8 }}>
-      <div className="stack-sm">
-        <h1>{view.game.title}</h1>
-        <div className="join-line">
-          <span className="badge badge-amber">Водещ</span>
-          <span>
-            Код <span className="code-chip">{code}</span>
-          </span>
-          <button className="link-btn" onClick={() => copy(code, "code")}>
-            {copied === "code" ? "✓ копиран" : "копирай"}
-          </button>
-          <span aria-hidden>·</span>
-          <button className="link-btn" onClick={() => copy(joinUrl, "link")}>
-            {copied === "link" ? "✓ копиран" : "копирай линка"}
-          </button>
-          <span aria-hidden>·</span>
-          <span>
-            👥 {view.playerCount} {view.playerCount === 1 ? "играч" : "играчи"}
-          </span>
-        </div>
-      </div>
-
-      <div className="panel stack-sm">
-        <ol className="phases">
-          {PHASES.map((p, i) => {
-            const current = PHASES.indexOf(view.game.phase);
-            const state = i < current ? "done" : i === current ? "current" : "todo";
-            return (
-              <li key={p} className="phase" data-state={state}>
-                <button
-                  type="button"
-                  disabled={busy || i === current}
-                  aria-current={i === current ? "step" : undefined}
-                  onClick={() => send(`/api/games/${code}`, "PATCH", { phase: p })}
-                >
-                  <span className="phase-dot">{i < current ? "✓" : i + 1}</span>
-                  <span className="phase-label">{PHASE_LABEL[p]}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-        <p className="phase-now">{PHASE_LABEL[view.game.phase]}</p>
-        <p className="hint center">{PHASE_HINT[view.game.phase]}</p>
-      </div>
-    </header>
   );
 }
 
@@ -183,7 +109,7 @@ function CastTab({
   send,
   code,
 }: {
-  view: GmView;
+  view: HostView;
   busy: boolean;
   send: Send;
   code: string;
@@ -247,7 +173,8 @@ function CastTab({
 
       {view.characters.length === 0 && !adding && (
         <div className="notice">
-          Още няма герои. Добави по един за всеки участник — и един за убития, когото играеш ти.
+          Още няма герои. Качи ги като .txt файлове — името на файла става име на героя, а текстът
+          описание.
         </div>
       )}
 
@@ -320,78 +247,33 @@ function CastTab({
           />
         </div>
       ) : (
-        <div className="sticky-bar">
+        <div className="sticky-bar row" style={{ alignItems: "flex-end" }}>
           <button className="btn btn-primary" onClick={startAdd} disabled={busy}>
             + Добави герой
           </button>
+          <ImportTxt
+            characters={view.characters}
+            busy={busy}
+            save={(id, name, description) =>
+              id
+                ? send(`/api/games/${code}/characters/${id}`, "PATCH", { description })
+                : send(`/api/games/${code}/characters`, "POST", { name, description })
+            }
+          />
         </div>
       )}
     </div>
   );
 }
 
-/* ── Intro story ───────────────────────────────────────────────── */
-function IntroTab({
-  view,
-  busy,
-  send,
-  code,
-}: {
-  view: GmView;
-  busy: boolean;
-  send: Send;
-  code: string;
-}) {
-  const [text, setText] = useState(view.game.intro);
-  const [saved, setSaved] = useState(false);
-  const dirty = text !== view.game.intro;
-
-  async function save() {
-    if (await send(`/api/games/${code}`, "PATCH", { intro: text })) {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    }
-  }
-
-  return (
-    <div className="stack">
-      <div className="panel stack">
-        <div className="eyebrow">Играчите го виждат щом отвориш за роли</div>
-        <h2>📜 Историята</h2>
-        <label className="field">
-          <span>Уводът, с който започва вечерта</span>
-          <textarea
-            value={text}
-            maxLength={10000}
-            style={{ minHeight: 260 }}
-            placeholder="Събота вечер. Иван събира старите приятели във вилата си край Боровец…"
-            onChange={(e) => setText(e.target.value)}
-          />
-        </label>
-        <div className="row">
-          <button className="btn btn-primary" onClick={save} disabled={busy || !dirty}>
-            {busy ? "Запазваме…" : saved ? "✓ Запазено" : "Запази увода"}
-          </button>
-          {!dirty && <ReadAloud src={view.introAudio} label="Чуй увода" />}
-        </div>
-        {!view.tts && (
-          <p className="hint">
-            Четенето на глас е изключено — задай ELEVENLABS_API_KEY на сървъра, за да го включиш.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ── The victim — the game master's own role ──────────────────── */
-function VictimTab({ view }: { view: GmView }) {
+/* ── The victim — the host's own role ──────────────────────────── */
+function VictimTab({ view }: { view: HostView }) {
   const victim = view.characters.find((c) => c.is_victim === 1);
   if (!victim) {
     return (
       <div className="notice">
-        Още няма убит. Добави героя на убития в „Герои“ и започни описанието му с „УБИТ“ — него го
-        играеш ти, а уликите му са абзаците, започващи с „Улика“.
+        Никой герой не започва с „УБИТ“. Добави го в началото на описанието на убития в „Герои“ —
+        уликите му са абзаците, започващи с „Улика“.
       </div>
     );
   }
@@ -410,7 +292,7 @@ function SolutionTab({
   send,
   code,
 }: {
-  view: GmView;
+  view: HostView;
   busy: boolean;
   send: Send;
   code: string;
@@ -485,7 +367,7 @@ function VotesTab({
   send,
   code,
 }: {
-  view: GmView;
+  view: HostView;
   busy: boolean;
   send: Send;
   code: string;

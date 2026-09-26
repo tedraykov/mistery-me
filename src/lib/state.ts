@@ -1,3 +1,4 @@
+import { isHost } from "./auth";
 import { all, get } from "./db";
 import { CLUE_INTERVAL_MS, victimClues } from "./format";
 import { audioUrl, ttsEnabled } from "./tts";
@@ -5,9 +6,10 @@ import type {
   CharacterRow,
   ClueTimer,
   GameRow,
-  GmView,
+  HostView,
   PlayerRow,
   PlayerView,
+  SetupView,
   VoteRow,
 } from "./types";
 
@@ -106,7 +108,7 @@ function clueTimer(game: GameRow, cast: CharacterRow[]): ClueTimer | null {
   };
 }
 
-export function buildGmView(game: GameRow): GmView {
+export function buildHostView(game: GameRow): HostView {
   const cast = characters(game.id);
   const claimed = claimedIds(game.id);
   const byId = new Map(cast.map((c) => [c.id, c]));
@@ -121,7 +123,7 @@ export function buildGmView(game: GameRow): GmView {
   }
 
   return {
-    view: "gm",
+    view: "host",
     game: {
       code: game.code,
       title: game.title,
@@ -150,4 +152,48 @@ export function buildGmView(game: GameRow): GmView {
       .sort((a, b) => b.votes - a.votes),
     voterCount: voteRows.length,
   };
+}
+
+/** The creator's view: names only. Descriptions and the killer stay hidden — they may be playing. */
+export function buildSetupView(game: GameRow): SetupView {
+  const cast = characters(game.id);
+  const claimed = claimedIds(game.id);
+  const victim = cast.find((c) => c.is_victim === 1);
+  return {
+    view: "setup",
+    game: {
+      code: game.code,
+      title: game.title,
+      phase: game.phase,
+      intro: game.intro,
+      updatedAt: game.updated_at,
+    },
+    introAudio: audioUrl(`/api/games/${game.code}/audio/intro`, game.intro),
+    tts: ttsEnabled(),
+    characters: cast.map((c) => ({
+      id: c.id,
+      name: c.name,
+      claimed: claimed.has(c.id),
+      isVictim: c.is_victim === 1,
+      empty: !c.description.trim(),
+    })),
+    victimCount: cast.filter((c) => c.is_victim === 1).length,
+    culpritCount: cast.filter((c) => c.is_culprit === 1).length,
+    playerCount: (
+      get<{ n: number }>("SELECT COUNT(*) AS n FROM players WHERE game_id = ?", game.id) ?? {
+        n: 0,
+      }
+    ).n,
+    hostName: victim && claimed.has(victim.id) ? victim.name : null,
+  };
+}
+
+/** A player's view — or the host's, if that player holds the victim's role. */
+export function viewForPlayer(game: GameRow, player: PlayerRow): PlayerView | HostView {
+  return isHost(game, player) ? buildHostView(game) : buildPlayerView(game, player);
+}
+
+/** What a creator or host sees after they change something. */
+export function editorView(game: GameRow, actor: "creator" | "host"): SetupView | HostView {
+  return actor === "creator" ? buildSetupView(game) : buildHostView(game);
 }

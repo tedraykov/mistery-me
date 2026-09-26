@@ -1,6 +1,6 @@
-import { GmDashboard } from "@/components/GmDashboard";
+import { SetupDashboard } from "@/components/SetupDashboard";
 
 export default async function GmPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  return <GmDashboard code={code.toUpperCase()} />;
+  return <SetupDashboard code={code.toUpperCase()} />;
 }

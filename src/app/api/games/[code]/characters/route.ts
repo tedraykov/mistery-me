@@ -1,13 +1,13 @@
-import { errorResponse, requireGm } from "@/lib/auth";
+import { errorResponse, requireEditor } from "@/lib/auth";
 import { json, requiredStr, str } from "@/lib/body";
 import { applyRoleMarker, get, run, touchGame } from "@/lib/db";
 import { id } from "@/lib/ids";
-import { buildGmView } from "@/lib/state";
+import { editorView } from "@/lib/state";
 
 export async function POST(req: Request, ctx: { params: Promise<{ code: string }> }) {
   try {
     const { code } = await ctx.params;
-    const game = await requireGm(code);
+    const { game, actor } = await requireEditor(req, code);
     const body = await json(req);
 
     const next =
@@ -30,7 +30,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
     applyRoleMarker(characterId, description);
 
     touchGame(game.id);
-    return Response.json(buildGmView(game));
+    return Response.json(editorView(game, actor));
   } catch (e) {
     return errorResponse(e);
   }

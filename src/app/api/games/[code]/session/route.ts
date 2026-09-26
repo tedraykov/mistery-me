@@ -1,16 +1,23 @@
-import { currentPlayer, errorResponse, findGame, isGm, setPlayerCookie } from "@/lib/auth";
+import {
+  asCreator,
+  currentPlayer,
+  errorResponse,
+  findGame,
+  requireCreator,
+  setPlayerCookie,
+} from "@/lib/auth";
 import { run, touchGame } from "@/lib/db";
 import { id, token } from "@/lib/ids";
-import { buildGmView, buildPlayerView } from "@/lib/state";
+import { buildSetupView, viewForPlayer } from "@/lib/state";
 
 /** Page bootstrap: resolves who the caller is, joining them as a new player if needed. */
-export async function POST(_req: Request, ctx: { params: Promise<{ code: string }> }) {
+export async function POST(req: Request, ctx: { params: Promise<{ code: string }> }) {
   try {
     const { code } = await ctx.params;
+    if (asCreator(req)) return Response.json(buildSetupView(await requireCreator(code)));
+
     const game = findGame(code);
     if (!game) return Response.json({ error: "Няма игра с този код" }, { status: 404 });
-
-    if (await isGm(game)) return Response.json(buildGmView(game));
 
     let player = await currentPlayer(game);
     if (!player) {
@@ -38,7 +45,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ code: string 
       };
     }
 
-    return Response.json(buildPlayerView(game, player));
+    return Response.json(viewForPlayer(game, player));
   } catch (e) {
     return errorResponse(e);
   }

@@ -42,14 +42,14 @@ export default async function HomePage() {
       </div>
 
       <div className="panel stack">
-        <div className="eyebrow">Водещ</div>
-        <h2>Ще водиш играта?</h2>
+        <div className="eyebrow">Нова игра</div>
+        <h2>Ще създаваш игра?</h2>
         <CreateForm />
       </div>
 
       {games.length > 0 && (
         <div className="panel stack-sm">
-          <div className="eyebrow">Твоите игри като водещ</div>
+          <div className="eyebrow">Игри, които си създал</div>
           {games.map((g) => (
             <Link key={g.id} href={`/gm/${g.code}`} className="pick-item" style={{ gap: 12, textDecoration: "none" }}>
               <span className="em">{initial(g.title)}</span>

@@ -84,8 +84,12 @@ export interface ClueTimer {
   next: { number: number; text: string; audio: string | null } | null;
 }
 
-export interface GmView {
-  view: "gm";
+/**
+ * The player holding the victim's role: they run the game and are the only one who sees every
+ * character's description.
+ */
+export interface HostView {
+  view: "host";
   game: {
     code: string;
     title: string;
@@ -98,11 +102,38 @@ export interface GmView {
   introAudio: string | null;
   tts: boolean;
   characters: (CharacterRow & { claimed: boolean })[];
-  /** Present while the game is being played and a victim exists. */
+  /** Present while the game is being played. */
   timer: ClueTimer | null;
   playerCount: number;
   votes: { characterId: string; characterName: string; votes: number; reasons: string[] }[];
   voterCount: number;
 }
 
-export type GameView = PlayerView | GmView;
+/** A character as the creator sees it: never its description or whether it is the killer. */
+export interface SetupCharacter {
+  id: string;
+  name: string;
+  claimed: boolean;
+  /** Public anyway — everyone sees who the victim is once they join. */
+  isVictim: boolean;
+  empty: boolean;
+}
+
+/**
+ * Whoever created the game uploads the characters blind — they may be playing too. They see
+ * names and whether a victim and a killer were recognised, never who the killer is.
+ */
+export interface SetupView {
+  view: "setup";
+  game: { code: string; title: string; phase: Phase; intro: string; updatedAt: number };
+  introAudio: string | null;
+  tts: boolean;
+  characters: SetupCharacter[];
+  victimCount: number;
+  culpritCount: number;
+  playerCount: number;
+  /** Name of the victim's character once a player has picked it — that player runs the game. */
+  hostName: string | null;
+}
+
+export type GameView = PlayerView | HostView | SetupView;

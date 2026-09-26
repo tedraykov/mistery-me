@@ -1,7 +1,7 @@
-import { HttpError, currentPlayer, errorResponse, findGame, requireGm } from "@/lib/auth";
+import { HttpError, currentPlayer, errorResponse, findGame, isHost, requireHost } from "@/lib/auth";
 import { json, str } from "@/lib/body";
 import { get, run, touchGame } from "@/lib/db";
-import { buildGmView, buildPlayerView } from "@/lib/state";
+import { buildHostView, buildPlayerView } from "@/lib/state";
 
 export async function POST(req: Request, ctx: { params: Promise<{ code: string }> }) {
   try {
@@ -13,6 +13,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
     const player = await currentPlayer(game);
     if (!player) throw new HttpError(401, "Не сте в тази игра");
     if (!player.character_id) throw new HttpError(409, "Първо изберете своята роля");
+    if (isHost(game, player)) throw new HttpError(403, "Водещият знае отговора — той не гласува");
 
     const body = await json(req);
     const characterId = str(body, "characterId", { max: 64 }).trim();
@@ -45,14 +46,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
   }
 }
 
-/** GM-only: wipe the tally so a round can be re-voted. */
+/** Host-only: wipe the tally so a round can be re-voted. */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ code: string }> }) {
   try {
     const { code } = await ctx.params;
-    const game = await requireGm(code);
+    const { game } = await requireHost(code);
     run("DELETE FROM votes WHERE game_id = ?", game.id);
     touchGame(game.id);
-    return Response.json(buildGmView(game));
+    return Response.json(buildHostView(game));
   } catch (e) {
     return errorResponse(e);
   }

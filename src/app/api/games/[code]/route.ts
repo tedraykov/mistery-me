@@ -1,8 +1,8 @@
-import { HttpError, errorResponse, requireGm } from "@/lib/auth";
+import { HttpError, errorResponse, findGame, requireEditor } from "@/lib/auth";
 import { json, str } from "@/lib/body";
 import { get, run } from "@/lib/db";
 import { victimClues } from "@/lib/format";
-import { buildGmView } from "@/lib/state";
+import { editorView } from "@/lib/state";
 import { warm } from "@/lib/tts";
 import { PHASES, type Phase } from "@/lib/types";
 
@@ -16,15 +16,21 @@ function warmClue(gameId: string, index: number): void {
   if (text) warm(text);
 }
 
+/** Phases the creator may switch between; running the game from there on is the host's. */
+const CREATOR_PHASES: Phase[] = ["setup", "lobby"];
+
 /**
- * GM-only: rename the game, move it between phases, write the intro story / solution, and drive
- * the victim's clue timer.
+ * Creator or host: rename the game, move it between phases and write the intro story. Host only:
+ * the solution and the victim's clue timer.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ code: string }> }) {
   try {
     const { code } = await ctx.params;
-    const game = await requireGm(code);
+    const { game, actor } = await requireEditor(req, code);
     const body = await json(req);
+    const hostOnly = (what: string) => {
+      if (actor !== "host") throw new HttpError(403, `${what} е само за водещия (убития)`);
+    };
 
     if ("title" in body) {
       const title = str(body, "title", { max: 120 }).trim();
@@ -35,6 +41,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ code: string 
     if ("phase" in body) {
       const phase = str(body, "phase", { max: 20 }) as Phase;
       if (!PHASES.includes(phase)) throw new HttpError(400, "Невалидна фаза");
+      if (
+        actor === "creator" &&
+        !(CREATOR_PHASES.includes(phase) && CREATOR_PHASES.includes(game.phase))
+      ) {
+        throw new HttpError(403, "Играта вече се води от убития");
+      }
       run("UPDATE games SET phase = ? WHERE id = ?", phase, game.id);
       // The clue timer starts the first time the game is played, and keeps its place after that.
       if (phase === "playing" && game.clue_round_started_at === null) {
@@ -44,6 +56,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ code: string 
     }
 
     if (body.clueRead === true) {
+      hostOnly("Таймерът за улики");
       // The victim read the next clue (on time or early): count it and start a new round.
       if (game.phase !== "playing") throw new HttpError(409, "Играта не е в ход");
       run(
@@ -55,6 +68,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ code: string 
     }
 
     if (body.resetClues === true) {
+      hostOnly("Таймерът за улики");
       run(
         "UPDATE games SET clues_read = 0, clue_round_started_at = ? WHERE id = ?",
         game.phase === "playing" ? Date.now() : null,
@@ -68,12 +82,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ code: string 
     }
 
     if ("solution" in body) {
+      hostOnly("Решението");
       run("UPDATE games SET solution = ? WHERE id = ?", str(body, "solution"), game.id);
     }
 
     run("UPDATE games SET updated_at = ? WHERE id = ?", Date.now(), game.id);
-    const fresh = await requireGm(code);
-    return Response.json(buildGmView(fresh));
+    return Response.json(editorView(findGame(code)!, actor));
   } catch (e) {
     return errorResponse(e);
   }

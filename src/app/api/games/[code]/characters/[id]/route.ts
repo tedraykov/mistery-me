@@ -1,7 +1,7 @@
-import { HttpError, errorResponse, requireGm } from "@/lib/auth";
+import { HttpError, errorResponse, requireEditor } from "@/lib/auth";
 import { json, str } from "@/lib/body";
 import { applyRoleMarker, get, run, touchGame } from "@/lib/db";
-import { buildGmView } from "@/lib/state";
+import { editorView } from "@/lib/state";
 
 const TEXT_FIELDS = {
   name: 80,
@@ -14,7 +14,7 @@ export async function PATCH(
 ) {
   try {
     const { code, id: characterId } = await ctx.params;
-    const game = await requireGm(code);
+    const { game, actor } = await requireEditor(req, code);
     if (!get("SELECT 1 FROM characters WHERE id = ? AND game_id = ?", characterId, game.id)) {
       throw new HttpError(404, "Няма такъв герой");
     }
@@ -34,22 +34,22 @@ export async function PATCH(
     }
 
     touchGame(game.id);
-    return Response.json(buildGmView(game));
+    return Response.json(editorView(game, actor));
   } catch (e) {
     return errorResponse(e);
   }
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ code: string; id: string }> },
 ) {
   try {
     const { code, id: characterId } = await ctx.params;
-    const game = await requireGm(code);
+    const { game, actor } = await requireEditor(req, code);
     run("DELETE FROM characters WHERE id = ? AND game_id = ?", characterId, game.id);
     touchGame(game.id);
-    return Response.json(buildGmView(game));
+    return Response.json(editorView(game, actor));
   } catch (e) {
     return errorResponse(e);
   }
