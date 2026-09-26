@@ -80,7 +80,9 @@ the non-root `node` user, with a `/api/health` healthcheck.
 
 1. Create an **Application** pointing at this repo (or a **Compose** service using
    `docker-compose.yml`).
-2. Build type: **Dockerfile**.
+2. Build type: **Dockerfile** — not Nixpacks (Dokploy's default). Nixpacks ships an old Node,
+   doesn't set `DATA_DIR` (so the database misses the volume), and bakes env vars — including
+   `ELEVENLABS_API_KEY` — into the image as build args.
 3. **Add a persistent volume** — this is the one thing that matters:
 
    | | |
