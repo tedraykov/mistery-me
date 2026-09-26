@@ -259,6 +259,7 @@ function CastTab({
                 ? send(`/api/games/${code}/characters/${id}`, "PATCH", { description })
                 : send(`/api/games/${code}/characters`, "POST", { name, description })
             }
+            saveGame={(field, text) => send(`/api/games/${code}`, "PATCH", { [field]: text })}
           />
         </div>
       )}

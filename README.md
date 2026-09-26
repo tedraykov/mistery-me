@@ -12,7 +12,7 @@ ElevenLabs.
 
 | | Where | Sees | Can |
 |---|---|---|---|
-| **Създател** (creator) | `/gm/КОД` | names only, and whether a victim and a killer were recognised | upload / replace / delete characters, write the intro, open roles (`setup` ⇄ `lobby`) |
+| **Създател** (creator) | `/gm/КОД` | names only, and whether a victim, a killer and a solution were recognised | upload / replace / delete characters, write the intro, upload the solution blind, open roles (`setup` ⇄ `lobby`) |
 | **Водещ** (host) = the player holding the victim | `/game/КОД` | every character's description, the killer, votes | everything: phases, clue timer, solution, editing characters |
 | **Играч** (player) | `/game/КОД` | their own card, the intro, the cast list | pick a role, vote |
 
@@ -39,7 +39,8 @@ everything the player needs — who they are, backstory, secret, goal.
 **Uploading:** „📂 Качи .txt файлове“ takes many files at once — one character per file. The file
 name is the name (`Тео.txt` → Тео; a leading number only sets the order: `01 - Тео.txt` → Тео), the
 contents the description. A file named like an existing character replaces its description instead
-of adding a duplicate. UTF-8, UTF-16 and Windows-1251 are all read correctly.
+of adding a duplicate. `Увод.txt` and `Решение.txt` set the intro and the solution (the creator can
+upload the solution but never read it back). UTF-8, UTF-16 and Windows-1251 are all read correctly.
 
 ### The victim and the clue timer
 
@@ -97,6 +98,35 @@ and next to the clue on the host's timer. Without the key the buttons simply don
 - `ELEVENLABS_VOICE_ID` picks the voice (default: premade "George"); `ELEVENLABS_MODEL_ID`
   defaults to `eleven_multilingual_v2`, which handles Bulgarian. The intro is capped at 10 000
   characters, the model's per-request limit.
+
+## Generating a mystery with Claude Code
+
+Instead of writing the `.txt` files yourself, let your local Claude Code write the whole mystery
+from a list of names — on your Claude subscription, no API key — and upload it as a new game:
+
+```bash
+# in Claude Code, from this repo:
+/mystery Иван, Ива Петрова, Тео, Мария --victim Иван --notes "рожден ден във вила"
+
+# or straight from the shell:
+npm run mystery -- Иван, Ива Петрова, Тео, Мария --victim Иван
+```
+
+- **Your system prompt** lives in `prompts/mystery-generator.md` — style, tone, length, number of
+  clues. The script adds the rules the app depends on (one character per name, `УБИТ` / `УБИЕЦ`,
+  `Улика N:` paragraphs) on top of it.
+- It runs `claude -p` headless (structured JSON output, no tools, outside the repo so this
+  project's `CLAUDE.md` doesn't leak in), creates a game on `MYSTERY_APP_URL` (default
+  `https://mistery.tedraykov.me`; set it in `.env`, e.g. `http://localhost:3000` for dev), and
+  uploads the characters, intro and solution.
+- **It stays blind:** only the game code, the names, the checks (victim / killer / solution / intro
+  recognised) and two links are printed. The first link — `/api/games/КОД/creator-login?key=…` —
+  gives your browser creator access to the new game; it works like a password.
+- A copy is kept in `generated/` (gitignored) in case the upload fails:
+  `npm run mystery -- --from generated/<file>.json` re-uploads it. Don't open it if you're playing.
+- Names with spaces: separate names with commas. `MYSTERY_MODEL` picks the model (`claude --model`).
+- If `ANTHROPIC_API_KEY` is set in your shell, the script drops it for the child process so the
+  run uses your subscription.
 
 ## Local development
 
@@ -177,7 +207,8 @@ descriptions or the killer.
 | `POST` | `/api/games/:code/claim` | player → claim / release a character (claiming the victim makes you host) |
 | `POST` | `/api/games/:code/vote` | player other than the host → accuse (only during `voting`) |
 | `DELETE` | `/api/games/:code/vote` | host → clear the tally |
-| `PATCH` | `/api/games/:code` | creator → title, intro, `setup`⇄`lobby`; host → also every phase, solution, `clueRead`, `resetClues` |
+| `PATCH` | `/api/games/:code` | creator → title, intro, solution (write-only), `setup`⇄`lobby`; host → also every phase, `clueRead`, `resetClues` |
+| `GET` | `/api/games/:code/creator-login?key=…` | holder of the creator key → creator cookie, redirect to `/gm/КОД` |
 | `POST` `PATCH` `DELETE` | `/api/games/:code/characters[/:id]` | creator or host |
 | `GET` | `/api/games/:code/audio/intro` | creator, or a player once past setup → mp3 |
 | `GET` | `/api/games/:code/audio/clue/:n` | host → the victim's clue `n` as mp3 |

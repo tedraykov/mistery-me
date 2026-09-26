@@ -20,8 +20,9 @@ function warmClue(gameId: string, index: number): void {
 const CREATOR_PHASES: Phase[] = ["setup", "lobby"];
 
 /**
- * Creator or host: rename the game, move it between phases and write the intro story. Host only:
- * the solution and the victim's clue timer.
+ * Creator or host: rename the game, move it between phases, and write the intro story and the
+ * solution (the creator only before the game starts, and write-only — it's never sent back to
+ * them). Host only: the victim's clue timer.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ code: string }> }) {
   try {
@@ -82,7 +83,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ code: string 
     }
 
     if ("solution" in body) {
-      hostOnly("Решението");
+      if (actor === "creator" && !CREATOR_PHASES.includes(game.phase)) {
+        throw new HttpError(403, "Играта вече се води от убития");
+      }
       run("UPDATE games SET solution = ? WHERE id = ?", str(body, "solution"), game.id);
     }
 

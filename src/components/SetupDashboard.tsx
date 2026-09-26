@@ -162,6 +162,7 @@ function CastList({
         <div className="notice">
           Качи героите като .txt файлове — по един файл за герой. Името на файла става име на героя,
           а текстът — описание. Описанието на убития започва с „УБИТ“, на убиеца — с „УБИЕЦ“.
+          „Увод.txt“ и „Решение.txt“ стават уводът и решението.
         </div>
       )}
 
@@ -211,6 +212,7 @@ function CastList({
               ? send(`/api/games/${code}/characters/${id}`, "PATCH", { description })
               : send(`/api/games/${code}/characters`, "POST", { name, description })
           }
+          saveGame={(field, text) => send(`/api/games/${code}`, "PATCH", { [field]: text })}
         />
         <span className="spacer" />
         <Link href={`/game/${code}`} className="btn btn-ghost">
@@ -241,6 +243,11 @@ function Checks({ view }: { view: SetupView }) {
         <span>✓ Убиецът е разпознат („УБИЕЦ“ в началото на описанието) — кой е, не ти казваме.</span>
       ) : (
         <span className="hint-warn">⚠️ Никое описание не започва с „УБИЕЦ“.</span>
+      )}
+      {view.hasSolution ? (
+        <span>✓ Решението е качено — ще го види само водещият и всички накрая.</span>
+      ) : (
+        <span className="faint">Няма решение. Качи „Решение.txt“ или го остави на водещия.</span>
       )}
     </div>
   );

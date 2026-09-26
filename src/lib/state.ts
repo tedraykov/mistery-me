@@ -179,6 +179,7 @@ export function buildSetupView(game: GameRow): SetupView {
     })),
     victimCount: cast.filter((c) => c.is_victim === 1).length,
     culpritCount: cast.filter((c) => c.is_culprit === 1).length,
+    hasSolution: game.solution.trim() !== "",
     playerCount: (
       get<{ n: number }>("SELECT COUNT(*) AS n FROM players WHERE game_id = ?", game.id) ?? {
         n: 0,

@@ -131,6 +131,8 @@ export interface SetupView {
   characters: SetupCharacter[];
   victimCount: number;
   culpritCount: number;
+  /** Whether a solution was uploaded — its text is never sent to the creator. */
+  hasSolution: boolean;
   playerCount: number;
   /** Name of the victim's character once a player has picked it — that player runs the game. */
   hostName: string | null;
