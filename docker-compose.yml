@@ -1,0 +1,14 @@
+services:
+  mistery:
+    build: .
+    # Dokploy maps its own domain to this port; locally it is http://localhost:3000
+    ports:
+      - "3000:3000"
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      - mistery-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  mistery-data:
