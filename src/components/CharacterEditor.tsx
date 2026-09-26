@@ -22,6 +22,27 @@ export const draftFrom = (c: CharacterRow): CharacterDraft => ({
   isCulprit: c.is_culprit === 1,
 });
 
+const MAX_DESCRIPTION = 8000;
+
+/**
+ * Read a .txt as text. Files saved on Bulgarian Windows (Notepad, Word "Plain text") are often
+ * UTF-16 or Windows-1251 rather than UTF-8, so detect those instead of showing mojibake.
+ */
+async function readText(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let text: string;
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) text = new TextDecoder("utf-16le").decode(bytes);
+  else if (bytes[0] === 0xfe && bytes[1] === 0xff) text = new TextDecoder("utf-16be").decode(bytes);
+  else {
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      text = new TextDecoder("windows-1251").decode(bytes);
+    }
+  }
+  return text.replace(/\r\n?/g, "\n").trim();
+}
+
 export function CharacterEditor({
   draft,
   setDraft,
@@ -40,8 +61,38 @@ export function CharacterEditor({
   saveLabel: string;
 }) {
   const [preview, setPreview] = useState(false);
+  const [fileNote, setFileNote] = useState<{ ok: boolean; text: string } | null>(null);
   const set = <K extends keyof CharacterDraft>(key: K, value: CharacterDraft[K]) =>
     setDraft({ ...draft, [key]: value });
+
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so picking the same file again still fires
+    if (!file) return;
+    if (file.size > 1_000_000) {
+      setFileNote({ ok: false, text: "Файлът е твърде голям." });
+      return;
+    }
+    const text = await readText(file);
+    if (!text) {
+      setFileNote({ ok: false, text: "Файлът е празен." });
+      return;
+    }
+    setDraft({
+      ...draft,
+      // An empty name is taken from the file name: "Тео.txt" → "Тео".
+      name: draft.name.trim() ? draft.name : file.name.replace(/\.[^.]+$/, "").slice(0, 80),
+      description: text.slice(0, MAX_DESCRIPTION),
+    });
+    setFileNote(
+      text.length > MAX_DESCRIPTION
+        ? {
+            ok: false,
+            text: `„${file.name}“ е зареден, но е по-дълъг от ${MAX_DESCRIPTION} знака — краят е отрязан.`,
+          }
+        : { ok: true, text: `✓ Заредено от „${file.name}“. Прегледай и запази.` },
+    );
+  }
 
   if (preview) {
     return (
@@ -78,7 +129,7 @@ export function CharacterEditor({
         <span>Описание</span>
         <textarea
           value={draft.description}
-          maxLength={8000}
+          maxLength={MAX_DESCRIPTION}
           style={{ minHeight: 260 }}
           placeholder={
             "ИТ консултант, 35 г. Двойка с Ива.\n\nСпокоен, наблюдателен, обичаш да стоиш отстрани и да гледаш хората.\n\nТвоята тайна: преди година зае от Иван 6000 лв. за стартъп, който се провали…"
@@ -89,6 +140,18 @@ export function CharacterEditor({
           Всичко, което играчът трябва да знае — кой е, история, тайна, цел. Празен ред започва нов абзац.
         </span>
       </label>
+
+      <div className="row row-tight">
+        <label className="btn btn-sm">
+          📄 Качи от .txt файл
+          <input type="file" accept=".txt,text/plain" hidden onChange={upload} disabled={busy} />
+        </label>
+        {fileNote ? (
+          <span className={fileNote.ok ? "hint" : "hint hint-warn"}>{fileNote.text}</span>
+        ) : (
+          <span className="hint">Заменя текста в описанието.</span>
+        )}
+      </div>
 
       <label className="toggle">
         <input

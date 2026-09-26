@@ -153,7 +153,7 @@ label.field {
   flex-direction: column;
   gap: 6px;
 }
-label.field > span {
+label.field > span:first-child {
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -637,6 +637,9 @@ textarea {
   font-size: 13px;
   color: var(--faint);
   line-height: 1.5;
+}
+.hint-warn {
+  color: #e8c55f;
 }
 
 @media (max-width: 560px) {
