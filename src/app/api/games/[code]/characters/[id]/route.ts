@@ -1,6 +1,6 @@
 import { HttpError, errorResponse, requireGm } from "@/lib/auth";
 import { json, str } from "@/lib/body";
-import { get, makeVictim, run, touchGame } from "@/lib/db";
+import { applyRoleMarker, get, run, touchGame } from "@/lib/db";
 import { buildGmView } from "@/lib/state";
 
 const TEXT_FIELDS = {
@@ -26,12 +26,8 @@ export async function PATCH(
       if (field === "name" && !value.trim()) throw new HttpError(400, "Името е задължително");
       run(`UPDATE characters SET ${field} = ? WHERE id = ?`, value, characterId);
     }
-    if ("isCulprit" in body) {
-      run("UPDATE characters SET is_culprit = ? WHERE id = ?", body.isCulprit ? 1 : 0, characterId);
-    }
-    if ("isVictim" in body) {
-      if (body.isVictim) makeVictim(game.id, characterId);
-      else run("UPDATE characters SET is_victim = 0 WHERE id = ?", characterId);
+    if ("description" in body) {
+      applyRoleMarker(characterId, str(body, "description", { max: TEXT_FIELDS.description }));
     }
     if ("sortOrder" in body && typeof body.sortOrder === "number") {
       run("UPDATE characters SET sort_order = ? WHERE id = ?", body.sortOrder, characterId);

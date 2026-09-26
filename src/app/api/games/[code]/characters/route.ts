@@ -1,6 +1,6 @@
 import { errorResponse, requireGm } from "@/lib/auth";
 import { json, requiredStr, str } from "@/lib/body";
-import { get, makeVictim, run, touchGame } from "@/lib/db";
+import { applyRoleMarker, get, run, touchGame } from "@/lib/db";
 import { id } from "@/lib/ids";
 import { buildGmView } from "@/lib/state";
 
@@ -17,18 +17,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
       )?.n ?? 0) + 1;
 
     const characterId = id();
+    const description = str(body, "description");
     run(
-      `INSERT INTO characters
-         (id, game_id, name, description, is_culprit, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO characters (id, game_id, name, description, sort_order)
+       VALUES (?, ?, ?, ?, ?)`,
       characterId,
       game.id,
       requiredStr(body, "name", 80),
-      str(body, "description"),
-      body.isCulprit ? 1 : 0,
+      description,
       next,
     );
-    if (body.isVictim) makeVictim(game.id, characterId);
+    applyRoleMarker(characterId, description);
 
     touchGame(game.id);
     return Response.json(buildGmView(game));

@@ -2,28 +2,22 @@
 
 import { useState } from "react";
 import { CharacterCard } from "@/components/CharacterCard";
-import { victimClues } from "@/lib/format";
+import { roleMarker, victimClues } from "@/lib/format";
 import type { CharacterRow } from "@/lib/types";
 
 export interface CharacterDraft {
   name: string;
   description: string;
-  isCulprit: boolean;
-  isVictim: boolean;
 }
 
 export const emptyDraft = (): CharacterDraft => ({
   name: "",
   description: "",
-  isCulprit: false,
-  isVictim: false,
 });
 
 export const draftFrom = (c: CharacterRow): CharacterDraft => ({
   name: c.name,
   description: c.description,
-  isCulprit: c.is_culprit === 1,
-  isVictim: c.is_victim === 1,
 });
 
 const MAX_DESCRIPTION = 8000;
@@ -98,7 +92,9 @@ export function CharacterEditor({
     );
   }
 
-  const clueCount = draft.isVictim ? victimClues(draft.description).length : 0;
+  // Killer / victim are read from the description's first word, not chosen separately.
+  const marker = roleMarker(draft.description);
+  const clueCount = marker === "victim" ? victimClues(draft.description).length : 0;
 
   if (preview) {
     return (
@@ -110,7 +106,7 @@ export function CharacterEditor({
           c={{
             id: "preview",
             claimed: false,
-            isVictim: draft.isVictim,
+            isVictim: marker === "victim",
             name: draft.name || "БЕЗ ИМЕ",
             description: draft.description,
           }}
@@ -139,23 +135,15 @@ export function CharacterEditor({
           maxLength={MAX_DESCRIPTION}
           style={{ minHeight: 260 }}
           placeholder={
-            draft.isVictim
-              ? "Иван, 40 г., домакинът на вечерта.\n\nТвоята история…\n\nУлика 1: Под саксията на терасата има ключ за избата.\n\nУлика 2: …"
-              : "ИТ консултант, 35 г. Двойка с Ива.\n\nСпокоен, наблюдателен, обичаш да стоиш отстрани и да гледаш хората.\n\nТвоята тайна: преди година зае от Иван 6000 лв. за стартъп, който се провали…"
+            "ИТ консултант, 35 г. Двойка с Ива.\n\nСпокоен, наблюдателен, обичаш да стоиш отстрани и да гледаш хората.\n\nТвоята тайна: преди година зае от Иван 6000 лв. за стартъп, който се провали…"
           }
           onChange={(e) => set("description", e.target.value)}
         />
-        {draft.isVictim ? (
-          <span className={clueCount > 0 ? "hint" : "hint hint-warn"}>
-            Всеки абзац, който започва с „Улика“, е улика — таймерът ти ги подава една по една.{" "}
-            <b>Намерени улики: {clueCount}</b>
-          </span>
-        ) : (
-          <span className="hint">
-            Всичко, което играчът трябва да знае — кой е, история, тайна, цел. Празен ред започва нов
-            абзац.
-          </span>
-        )}
+        <span className="hint">
+          Всичко, което играчът трябва да знае — кой е, история, тайна, цел. Празен ред започва нов
+          абзац. Започни с „УБИЕЦ“ за убиеца или с „УБИТ“ за убития (него го играеш ти, а уликите
+          са абзаците му, започващи с „Улика“).
+        </span>
       </label>
 
       <div className="row row-tight">
@@ -170,36 +158,20 @@ export function CharacterEditor({
         )}
       </div>
 
-      <div className="stack-sm">
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={draft.isVictim}
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                isVictim: e.target.checked,
-                isCulprit: e.target.checked ? false : draft.isCulprit,
-              })
-            }
-          />
-          ☠️ Това е убитият — играе го водещият, в описанието му са уликите
-        </label>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={draft.isCulprit}
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                isCulprit: e.target.checked,
-                isVictim: e.target.checked ? false : draft.isVictim,
-              })
-            }
-          />
-          🔪 Този герой е виновният (вижда се само от теб, до разкритието)
-        </label>
-      </div>
+      {marker === "culprit" && (
+        <div className="notice">
+          🔪 <b>Убиецът.</b> Разпознат по „УБИЕЦ“ в началото. Вижда се само от теб до разкритието.
+        </div>
+      )}
+      {marker === "victim" && (
+        <div className="notice">
+          ☠️ <b>Убитият</b> — играеш го ти, никой играч не може да го избере.{" "}
+          <span className={clueCount > 0 ? "" : "hint-warn"}>
+            Намерени улики: <b>{clueCount}</b>
+          </span>
+          {clueCount === 0 && " — започни абзаците с уликите с „Улика“."}
+        </div>
+      )}
 
       <div className="row">
         <button className="btn btn-primary" onClick={onSave} disabled={busy || !draft.name.trim()}>

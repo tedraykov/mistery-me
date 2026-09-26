@@ -27,8 +27,19 @@ uploaded from a `.txt` file (UTF-8, UTF-16 or Windows-1251).
 
 ### The victim and the clue timer
 
-One character is marked **☠️ убитият**. The GM plays them: players see them in the cast but can't
-pick or accuse them, and the GM gets their card under „☠️ Моята роля“.
+Killer and victim aren't chosen with a switch — they are read from the **first word of the
+description** (any letter case, leading emoji ignored):
+
+| First word | Means |
+|---|---|
+| `УБИЕЦ` (also `УБИЕЦЪТ`, `УБИЙЦА`, `УБИЙЦАТА`) | 🔪 the killer — shown to everyone at the reveal |
+| `УБИТ` (also `УБИТИЯТ`, `УБИТА`, `УБИТАТА`) | ☠️ the victim — there should be exactly one |
+
+The flags are recomputed every time a description is saved (and once on boot); the editor shows
+what it recognised as you type.
+
+The GM plays the victim: players see them in the cast but can't pick or accuse them, and the GM
+gets their card under „☠️ Моята роля“.
 
 Clues live in the victim's description — every paragraph that starts with „Улика“:
 

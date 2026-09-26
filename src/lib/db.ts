@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { roleMarker } from "./format";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS games (
@@ -72,6 +73,18 @@ function migrate(db: DatabaseSync): void {
   }
   if (!hasColumn(db, "characters", "is_victim")) {
     db.exec("ALTER TABLE characters ADD COLUMN is_victim INTEGER NOT NULL DEFAULT 0");
+  }
+
+  // Killer and victim come from the description's first word ("УБИЕЦ" / "УБИТ"). Recompute them
+  // on boot so rows saved before that rule (or under an older word list) agree with it.
+  const rows = db.prepare("SELECT id, description FROM characters").all() as {
+    id: string;
+    description: string;
+  }[];
+  const update = db.prepare("UPDATE characters SET is_culprit = ?, is_victim = ? WHERE id = ?");
+  for (const r of rows) {
+    const marker = roleMarker(r.description);
+    update.run(marker === "culprit" ? 1 : 0, marker === "victim" ? 1 : 0, r.id);
   }
 
   // Characters used to have five structured sections; they are now one plain text. Fold the old
@@ -147,12 +160,20 @@ export function run(sql: string, ...params: unknown[]): void {
 }
 
 /**
- * Make `characterId` the game's one victim. The victim is played by the game master, so any player
- * who had picked that role is released from it.
+ * Set a character's killer / victim flags from its description's first word. The victim is played
+ * by the game master, so a player who had picked that role is released from it.
  */
-export function makeVictim(gameId: string, characterId: string): void {
-  run("UPDATE characters SET is_victim = (id = ?) WHERE game_id = ?", characterId, gameId);
-  run("UPDATE players SET character_id = NULL WHERE character_id = ?", characterId);
+export function applyRoleMarker(characterId: string, description: string): void {
+  const marker = roleMarker(description);
+  run(
+    "UPDATE characters SET is_culprit = ?, is_victim = ? WHERE id = ?",
+    marker === "culprit" ? 1 : 0,
+    marker === "victim" ? 1 : 0,
+    characterId,
+  );
+  if (marker === "victim") {
+    run("UPDATE players SET character_id = NULL WHERE character_id = ?", characterId);
+  }
 }
 
 export function touchGame(gameId: string): void {
