@@ -117,28 +117,33 @@ function open(): DatabaseSync {
   const dir = dataDir();
   mkdirSync(dir, { recursive: true });
   const db = new DatabaseSync(path.join(dir, "mistery.sqlite"));
-  db.exec("PRAGMA journal_mode = WAL");
+  // Set the lock timeout first, so every statement after it waits instead of failing.
   db.exec("PRAGMA busy_timeout = 5000");
+  db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
   migrate(db);
   return db;
 }
 
-// Next dev-mode hot reload re-evaluates modules; keep one handle per process.
+// Opened on first query, not at import: `next build` imports route modules in parallel workers,
+// and none of them should touch the database. Next dev-mode hot reload re-evaluates modules, so
+// the handle lives on globalThis to keep one per process.
 const globalForDb = globalThis as unknown as { __misteryDb?: DatabaseSync };
-export const db: DatabaseSync = (globalForDb.__misteryDb ??= open());
+function db(): DatabaseSync {
+  return (globalForDb.__misteryDb ??= open());
+}
 
 export function all<T>(sql: string, ...params: unknown[]): T[] {
-  return db.prepare(sql).all(...(params as never[])) as T[];
+  return db().prepare(sql).all(...(params as never[])) as T[];
 }
 
 export function get<T>(sql: string, ...params: unknown[]): T | undefined {
-  return db.prepare(sql).get(...(params as never[])) as T | undefined;
+  return db().prepare(sql).get(...(params as never[])) as T | undefined;
 }
 
 export function run(sql: string, ...params: unknown[]): void {
-  db.prepare(sql).run(...(params as never[]));
+  db().prepare(sql).run(...(params as never[]));
 }
 
 export function touchGame(gameId: string): void {
