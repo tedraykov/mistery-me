@@ -75,17 +75,6 @@ function migrate(db: DatabaseSync): void {
     db.exec("ALTER TABLE characters ADD COLUMN is_victim INTEGER NOT NULL DEFAULT 0");
   }
 
-  // Killer and victim come from the description's first word ("УБИЕЦ" / "УБИТ"). Recompute them
-  // on boot so rows saved before that rule (or under an older word list) agree with it.
-  const rows = db.prepare("SELECT id, description FROM characters").all() as {
-    id: string;
-    description: string;
-  }[];
-  const update = db.prepare("UPDATE characters SET is_culprit = ?, is_victim = ? WHERE id = ?");
-  for (const r of rows) {
-    const marker = roleMarker(r.description);
-    update.run(marker === "culprit" ? 1 : 0, marker === "victim" ? 1 : 0, r.id);
-  }
 
   // Characters used to have five structured sections; they are now one plain text. Fold the old
   // sections into it once. The old columns stay in the table, unused.
@@ -123,6 +112,18 @@ function migrate(db: DatabaseSync): void {
       ].filter(Boolean);
       update.run([head.join("\n"), r.description.trim()].filter(Boolean).join("\n\n"), r.id);
     }
+  }
+
+  // Killer and victim come from the description's first word ("УБИЕЦ" / "УБИТ"). Recompute them
+  // on boot so rows saved before that rule (or under an older word list) agree with it.
+  const rows = db.prepare("SELECT id, description FROM characters").all() as {
+    id: string;
+    description: string;
+  }[];
+  const update = db.prepare("UPDATE characters SET is_culprit = ?, is_victim = ? WHERE id = ?");
+  for (const r of rows) {
+    const marker = roleMarker(r.description);
+    update.run(marker === "culprit" ? 1 : 0, marker === "victim" ? 1 : 0, r.id);
   }
 }
 
