@@ -1,9 +1,10 @@
 # 🕯️ Мистерия — web mystery party game
 
-A self-hosted web app for running a murder-mystery party. The game master writes each
-character's story, secret and goal; players join with a 6-character code, claim their role, and
-see **only their own** card. Mid-game the GM can drop clues (to everyone or to one player), open
-voting, and finally reveal the solution.
+A self-hosted web app for running a murder-mystery party. The game master writes the
+introduction story and a plain-text description for each character; players join with a
+6-character code, claim their role, and see **only their own** card. Mid-game the GM can drop clues
+(to everyone or to one player), open voting, and finally reveal the solution. The intro and the
+clues can be read aloud through ElevenLabs.
 
 UI language: **Bulgarian**.
 
@@ -13,22 +14,14 @@ UI language: **Bulgarian**.
 
 | | |
 |---|---|
-| **1. Подготовка** | GM creates a game, gets a 6-char code, and writes one character per guest. Nobody else can see anything yet. |
-| **2. Разпределяне на роли** | Players open the site, type the code, and pick their character from the cast list. A taken role can't be picked twice. |
+| **1. Подготовка** | GM creates a game, gets a 6-char code, writes the intro story („Увод“) and one character per guest. Nobody else can see anything yet. |
+| **2. Разпределяне на роли** | Players open the site, type the code, read the intro, and pick their character from the cast list. A taken role can't be picked twice. |
 | **3. Играта върви** | Everyone reads their own card. The GM releases clues — they appear on players' phones on their own. |
 | **4. Гласуване** | Each player accuses someone and optionally writes why. The GM watches the tally live. |
 | **5. Разкритие** | The solution, the real culprit(s) and the full vote tally become visible to everyone. |
 
-A character card has exactly the structure from the original format:
-
-```
-🚬 ТЕО              Роля: ИТ консултант, 35 г.   Двойка с: Ива ❤️
-👤 ЗА ТЕБ           free text, blank line = new paragraph
-🤫 ТВОЯТА ТАЙНА     free text
-🧠 КАКВО ЗНАЕШ      one bullet per line
-🎯 ТВОЯТА ЦЕЛ       free text
-⚠️ ВАЖНО            one bullet per line
-```
+A character is just a name and one free-text description (blank line = new paragraph) holding
+everything the player needs — who they are, backstory, secret, goal.
 
 The GM has a **👁️ Преглед** button to see the rendered card before saving.
 
@@ -43,6 +36,20 @@ The GM has a **👁️ Преглед** button to see the rendered card before s
   token; each player's browser holds a player token. Clearing cookies loses access to that role.
 - Clients poll `/api/games/:code/state` every 3–4s, so clue drops and phase changes land without
   a refresh.
+
+## Read-aloud (ElevenLabs)
+
+Set `ELEVENLABS_API_KEY` and a **🔊 Чуй** button appears next to the intro story and every clue,
+for the GM and for players. Without the key the buttons simply don't show.
+
+- Each distinct text is synthesized once and cached as an mp3 in `$DATA_DIR/tts/`, so ten phones
+  replaying a clue cost one API call. Editing a text generates a fresh file on next play.
+- A clue is synthesized in the background the moment the GM releases it, so players don't wait.
+- Players can only fetch audio for things they can already read (released clues addressed to them,
+  the intro once the game has left setup).
+- `ELEVENLABS_VOICE_ID` picks the voice (default: premade "George"); `ELEVENLABS_MODEL_ID`
+  defaults to `eleven_multilingual_v2`, which handles Bulgarian. The intro is capped at 10 000
+  characters, the model's per-request limit.
 
 ## Local development
 
@@ -90,6 +97,8 @@ the non-root `node` user, with a `/api/health` healthcheck.
    DATA_DIR=/app/data
    PORT=3000
    ```
+
+   Add `ELEVENLABS_API_KEY` (and optionally `ELEVENLABS_VOICE_ID`) to enable read-aloud.
 5. Set the container port to **3000** and attach your domain. Dokploy's Traefik terminates TLS.
 6. Health check path: `/api/health`.
 7. **Keep replicas at 1.** One SQLite file wants one writer process; scaling horizontally would
@@ -118,13 +127,17 @@ and a player's payload never contains another character's secret.
 | `POST` | `/api/games/:code/claim` | player → claim / release a character |
 | `POST` | `/api/games/:code/vote` | player → accuse (only during `voting`) |
 | `DELETE` | `/api/games/:code/vote` | GM → clear the tally |
-| `PATCH` | `/api/games/:code` | GM → title, phase, solution |
+| `PATCH` | `/api/games/:code` | GM → title, phase, intro, solution |
 | `POST` `PATCH` `DELETE` | `/api/games/:code/characters[/:id]` | GM |
 | `POST` `PATCH` `DELETE` | `/api/games/:code/clues[/:id]` | GM |
+| `GET` | `/api/games/:code/audio/intro` | GM, or a player once past setup → mp3 |
+| `GET` | `/api/games/:code/audio/clues/:id` | GM, or a player the clue is released to → mp3 |
 | `GET` | `/api/health` | anyone |
 
 ## Data model
 
 `games` → `characters`, `players`, `clues`, `votes`. A player row holds a nullable
 `character_id`; a unique index on it enforces that two people can't claim the same role.
-Schema is applied idempotently on boot (`src/lib/db.ts`) — no migration step to run.
+Schema is applied idempotently on boot (`src/lib/db.ts`) — no migration step to run. Databases
+from before the plain-text characters get their old sections (and role / pair lines) folded into
+`description` once, on first boot.

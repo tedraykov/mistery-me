@@ -255,24 +255,145 @@ textarea {
   color: var(--parchment);
 }
 
-/* ── Code display ──────────────────────────────────────────────── */
-.code-display {
+/* ── Join code ─────────────────────────────────────────────────── */
+.join-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13.5px;
+  color: var(--faint);
+}
+.code-chip {
   font-family: var(--mono);
-  font-size: clamp(30px, 11vw, 52px);
-  letter-spacing: 0.24em;
   font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--parchment);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 7px;
+  margin-left: 4px;
+}
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link-btn:hover {
   color: var(--amber);
-  text-shadow: 0 0 34px rgba(226, 169, 74, 0.28);
-  padding-left: 0.24em;
+  text-decoration-color: currentColor;
 }
 .code-input {
   font-family: var(--mono) !important;
-  font-size: 30px !important;
-  letter-spacing: 0.34em !important;
-  text-align: center;
+  font-size: 18px !important;
+  letter-spacing: 0.2em !important;
   text-transform: uppercase;
-  padding: 14px 10px !important;
-  padding-left: calc(10px + 0.34em) !important;
+}
+
+/* ── Phase stepper ─────────────────────────────────────────────── */
+.phases {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.phase {
+  position: relative;
+}
+/* The connector from the previous step to this one. */
+.phase::before {
+  content: "";
+  position: absolute;
+  top: 15px;
+  left: calc(-50% + 20px);
+  right: calc(50% + 20px);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.phase:first-child::before {
+  display: none;
+}
+.phase[data-state="done"]::before,
+.phase[data-state="current"]::before {
+  background: linear-gradient(90deg, var(--amber-dim), var(--amber));
+}
+.phase button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 2px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.phase button:disabled {
+  cursor: default;
+}
+.phase-dot {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--ink-2);
+  color: var(--faint);
+  font-size: 13px;
+  font-weight: 700;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.phase-label {
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--faint);
+}
+.phase button:hover:not(:disabled) .phase-dot {
+  border-color: var(--amber);
+}
+.phase button:hover:not(:disabled) .phase-label {
+  color: var(--parchment);
+}
+.phase[data-state="done"] .phase-dot {
+  border-color: var(--amber-dim);
+  color: var(--amber);
+}
+.phase[data-state="done"] .phase-label {
+  color: var(--muted);
+}
+.phase[data-state="current"] .phase-dot {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 4px rgba(226, 169, 74, 0.14),
+    0 0 22px rgba(226, 169, 74, 0.35);
+}
+.phase[data-state="current"] .phase-label {
+  color: var(--parchment);
+  font-weight: 600;
+}
+.phase-now {
+  display: none;
+  margin: 2px 0 0;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14.5px;
 }
 
 /* ── Badges ────────────────────────────────────────────────────── */
@@ -327,10 +448,6 @@ textarea {
     radial-gradient(420px 150px at 18% 0%, rgba(226, 169, 74, 0.11), transparent 70%),
     #1a1d26;
 }
-.card-emoji {
-  font-size: 40px;
-  line-height: 1;
-}
 .card-name {
   font-family: var(--serif);
   font-size: clamp(26px, 7vw, 36px);
@@ -358,63 +475,13 @@ textarea {
 .section:first-of-type {
   border-top: none;
 }
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--amber);
-  margin-bottom: 12px;
-}
-.section-title .ico {
-  font-size: 16px;
-  letter-spacing: 0;
-}
-.section-secret .section-title {
-  color: #ef9f99;
-}
-.section-secret {
-  background: linear-gradient(180deg, rgba(201, 81, 74, 0.075), transparent 60%);
-}
-.section-knows .section-title {
-  color: #8fd0c8;
-}
-.section-goal .section-title {
-  color: #c3b6e8;
-}
-.section-warn .section-title {
-  color: #e8c55f;
-}
-.section-warn {
-  background: linear-gradient(180deg, rgba(226, 169, 74, 0.06), transparent 60%);
-}
 .section-body {
   font-size: 16px;
   line-height: 1.68;
   color: #ddd8cd;
 }
-.section-body ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.section-body li {
-  position: relative;
-  padding-left: 20px;
-}
-.section-body li::before {
-  content: "•";
-  position: absolute;
-  left: 2px;
-  top: -1px;
-  color: var(--amber);
-  font-size: 18px;
+.section-body p {
+  white-space: pre-line;
 }
 
 /* ── Lists / pickers ───────────────────────────────────────────── */
@@ -448,11 +515,18 @@ textarea {
   cursor: not-allowed;
 }
 .pick-item .em {
-  font-size: 26px;
-  line-height: 1;
-  width: 32px;
-  text-align: center;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--amber);
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
 }
 .pick-item .nm {
   font-family: var(--serif);
@@ -568,6 +642,13 @@ textarea {
 @media (max-width: 560px) {
   .panel {
     padding: 16px;
+  }
+  /* Five labels don't fit side by side on a phone: show dots only, and name the current phase. */
+  .phase-label {
+    display: none;
+  }
+  .phase-now {
+    display: block;
   }
   .section,
   .card-head {

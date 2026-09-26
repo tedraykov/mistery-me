@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { all } from "@/lib/db";
-import { PHASE_LABEL } from "@/lib/format";
+import { PHASE_LABEL, initial } from "@/lib/format";
 import { CreateForm, JoinForm } from "@/components/HomeForms";
 import type { GameRow } from "@/lib/types";
 
@@ -51,8 +51,8 @@ export default async function HomePage() {
         <div className="panel stack-sm">
           <div className="eyebrow">Твоите игри като водещ</div>
           {games.map((g) => (
-            <Link key={g.id} href={`/gm/${g.code}`} className="pick-item" style={{ gap: 12 }}>
-              <span className="em">🗂️</span>
+            <Link key={g.id} href={`/gm/${g.code}`} className="pick-item" style={{ gap: 12, textDecoration: "none" }}>
+              <span className="em">{initial(g.title)}</span>
               <span className="stack" style={{ gap: 2, flex: 1 }}>
                 <span className="nm">{g.title}</span>
                 <span className="faint">

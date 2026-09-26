@@ -4,15 +4,8 @@ import { get, run, touchGame } from "@/lib/db";
 import { buildGmView } from "@/lib/state";
 
 const TEXT_FIELDS = {
-  emoji: 8,
   name: 80,
-  role: 160,
-  pair: 160,
-  about: 8000,
-  secret: 8000,
-  knows: 8000,
-  goal: 8000,
-  important: 8000,
+  description: 8000,
 } as const;
 
 export async function PATCH(

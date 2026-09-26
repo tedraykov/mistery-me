@@ -18,19 +18,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
 
     run(
       `INSERT INTO characters
-         (id, game_id, emoji, name, role, pair, about, secret, knows, goal, important, is_culprit, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, game_id, name, description, is_culprit, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       id(),
       game.id,
-      str(body, "emoji", { max: 8 }),
       requiredStr(body, "name", 80),
-      str(body, "role", { max: 160 }),
-      str(body, "pair", { max: 160 }),
-      str(body, "about"),
-      str(body, "secret"),
-      str(body, "knows"),
-      str(body, "goal"),
-      str(body, "important"),
+      str(body, "description"),
       body.isCulprit ? 1 : 0,
       next,
     );

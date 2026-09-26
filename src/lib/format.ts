@@ -6,12 +6,9 @@ export function paragraphs(text: string): string[] {
     .filter(Boolean);
 }
 
-/** One bullet per line; leading •, -, * markers are optional and stripped. */
-export function bullets(text: string): string[] {
-  return text
-    .split("\n")
-    .map((line) => line.replace(/^\s*[•\-*–]\s*/, "").trim())
-    .filter(Boolean);
+/** First letter of a name, for the round avatar in cast lists. */
+export function initial(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "?";
 }
 
 export const PHASE_LABEL: Record<string, string> = {

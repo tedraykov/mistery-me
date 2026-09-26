@@ -9,6 +9,7 @@ export interface GameRow {
   gm_token: string;
   phase: Phase;
   solution: string;
+  intro: string;
   created_at: number;
   updated_at: number;
 }
@@ -16,15 +17,8 @@ export interface GameRow {
 export interface CharacterRow {
   id: string;
   game_id: string;
-  emoji: string;
   name: string;
-  role: string;
-  pair: string;
-  about: string;
-  secret: string;
-  knows: string;
-  goal: string;
-  important: string;
+  description: string;
   is_culprit: number;
   sort_order: number;
 }
@@ -61,20 +55,13 @@ export interface VoteRow {
 /** The public shape of a character — no secrets. */
 export interface CharacterPublic {
   id: string;
-  emoji: string;
   name: string;
-  role: string;
-  pair: string;
   claimed: boolean;
 }
 
 /** Everything the owning player (or the GM) may read. */
 export interface CharacterPrivate extends CharacterPublic {
-  about: string;
-  secret: string;
-  knows: string;
-  goal: string;
-  important: string;
+  description: string;
 }
 
 export interface CluePublic {
@@ -83,12 +70,17 @@ export interface CluePublic {
   body: string;
   forMe: boolean;
   releasedAt: number;
+  /** Read-aloud URL, or null when narration is off. */
+  audio: string | null;
 }
 
 export interface PlayerView {
   view: "player";
   game: { code: string; title: string; phase: Phase; updatedAt: number };
   playerId: string;
+  /** Empty until the game leaves setup. */
+  intro: string;
+  introAudio: string | null;
   me: CharacterPrivate | null;
   cast: CharacterPublic[];
   clues: CluePublic[];
@@ -100,11 +92,21 @@ export interface PlayerView {
 
 export interface GmClue extends ClueRow {
   targetName: string;
+  audio: string | null;
 }
 
 export interface GmView {
   view: "gm";
-  game: { code: string; title: string; phase: Phase; solution: string; updatedAt: number };
+  game: {
+    code: string;
+    title: string;
+    phase: Phase;
+    solution: string;
+    intro: string;
+    updatedAt: number;
+  };
+  introAudio: string | null;
+  tts: boolean;
   characters: (CharacterRow & { claimed: boolean })[];
   clues: GmClue[];
   playerCount: number;

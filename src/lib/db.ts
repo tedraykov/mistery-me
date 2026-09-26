@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS games (
   gm_token    TEXT NOT NULL,
   phase       TEXT NOT NULL DEFAULT 'setup',
   solution    TEXT NOT NULL DEFAULT '',
+  intro       TEXT NOT NULL DEFAULT '',
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );
@@ -17,15 +18,8 @@ CREATE TABLE IF NOT EXISTS games (
 CREATE TABLE IF NOT EXISTS characters (
   id          TEXT PRIMARY KEY,
   game_id     TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-  emoji       TEXT NOT NULL DEFAULT '',
   name        TEXT NOT NULL,
-  role        TEXT NOT NULL DEFAULT '',
-  pair        TEXT NOT NULL DEFAULT '',
-  about       TEXT NOT NULL DEFAULT '',
-  secret      TEXT NOT NULL DEFAULT '',
-  knows       TEXT NOT NULL DEFAULT '',
-  goal        TEXT NOT NULL DEFAULT '',
-  important   TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
   is_culprit  INTEGER NOT NULL DEFAULT 0,
   sort_order  INTEGER NOT NULL DEFAULT 0
 );
@@ -65,14 +59,69 @@ CREATE TABLE IF NOT EXISTS votes (
 );
 `;
 
+export function dataDir(): string {
+  return process.env.DATA_DIR ?? path.join(process.cwd(), "data");
+}
+
+function hasColumn(db: DatabaseSync, table: string, column: string): boolean {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return cols.some((c) => c.name === column);
+}
+
+/** Bring databases created by older versions up to the current schema. */
+function migrate(db: DatabaseSync): void {
+  if (!hasColumn(db, "games", "intro")) {
+    db.exec("ALTER TABLE games ADD COLUMN intro TEXT NOT NULL DEFAULT ''");
+  }
+
+  // Characters used to have five structured sections; they are now one plain text. Fold the old
+  // sections into it once. The old columns stay in the table, unused.
+  if (!hasColumn(db, "characters", "description")) {
+    db.exec("ALTER TABLE characters ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+    const rows = db
+      .prepare("SELECT id, about, secret, knows, goal, important FROM characters")
+      .all() as Record<string, string>[];
+    const update = db.prepare("UPDATE characters SET description = ? WHERE id = ?");
+    for (const r of rows) {
+      const parts = [
+        r.about.trim(),
+        r.secret.trim() && `Твоята тайна:\n${r.secret.trim()}`,
+        r.knows.trim() && `Какво знаеш:\n${r.knows.trim()}`,
+        r.goal.trim() && `Твоята цел:\n${r.goal.trim()}`,
+        r.important.trim() && `Важно:\n${r.important.trim()}`,
+      ].filter(Boolean);
+      update.run(parts.join("\n\n"), r.id);
+    }
+  }
+
+  // Role and pair used to be separate fields too; prepend them to the description once, then
+  // clear them so this is a no-op on the next boot.
+  if (hasColumn(db, "characters", "role")) {
+    const rows = db
+      .prepare("SELECT id, role, pair, description FROM characters WHERE role != '' OR pair != ''")
+      .all() as Record<string, string>[];
+    const update = db.prepare(
+      "UPDATE characters SET description = ?, role = '', pair = '' WHERE id = ?",
+    );
+    for (const r of rows) {
+      const head = [
+        r.role.trim() && `Роля: ${r.role.trim()}`,
+        r.pair.trim() && `Двойка с: ${r.pair.trim()}`,
+      ].filter(Boolean);
+      update.run([head.join("\n"), r.description.trim()].filter(Boolean).join("\n\n"), r.id);
+    }
+  }
+}
+
 function open(): DatabaseSync {
-  const dir = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
+  const dir = dataDir();
   mkdirSync(dir, { recursive: true });
   const db = new DatabaseSync(path.join(dir, "mistery.sqlite"));
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA busy_timeout = 5000");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
 

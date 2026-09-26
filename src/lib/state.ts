@@ -1,4 +1,5 @@
 import { all, get } from "./db";
+import { audioUrl, clueSpeech, ttsEnabled } from "./tts";
 import type {
   CharacterRow,
   ClueRow,
@@ -43,6 +44,7 @@ export function buildPlayerView(game: GameRow, player: PlayerRow): PlayerView {
       body: c.body,
       forMe: c.target !== "all",
       releasedAt: c.released_at!,
+      audio: audioUrl(`/api/games/${game.code}/audio/clues/${c.id}`, clueSpeech(c)),
     }));
 
   const vote = get<VoteRow>(
@@ -50,6 +52,8 @@ export function buildPlayerView(game: GameRow, player: PlayerRow): PlayerView {
     game.id,
     player.id,
   );
+
+  const intro = game.phase === "setup" ? "" : game.intro;
 
   const tally = revealed
     ? all<{ character_id: string; n: number }>(
@@ -67,25 +71,17 @@ export function buildPlayerView(game: GameRow, player: PlayerRow): PlayerView {
       updatedAt: game.updated_at,
     },
     playerId: player.id,
+    intro,
+    introAudio: audioUrl(`/api/games/${game.code}/audio/intro`, intro),
     me: mine && {
       id: mine.id,
-      emoji: mine.emoji,
       name: mine.name,
-      role: mine.role,
-      pair: mine.pair,
       claimed: true,
-      about: mine.about,
-      secret: mine.secret,
-      knows: mine.knows,
-      goal: mine.goal,
-      important: mine.important,
+      description: mine.description,
     },
     cast: cast.map((c) => ({
       id: c.id,
-      emoji: c.emoji,
       name: c.name,
-      role: c.role,
-      pair: c.pair,
       claimed: claimed.has(c.id),
     })),
     clues,
@@ -107,6 +103,7 @@ export function buildGmView(game: GameRow): GmView {
   ).map((c) => ({
     ...c,
     targetName: c.target === "all" ? "Всички" : (byId.get(c.target)?.name ?? "—"),
+    audio: audioUrl(`/api/games/${game.code}/audio/clues/${c.id}`, clueSpeech(c)),
   }));
 
   const voteRows = all<VoteRow>("SELECT * FROM votes WHERE game_id = ?", game.id);
@@ -125,8 +122,11 @@ export function buildGmView(game: GameRow): GmView {
       title: game.title,
       phase: game.phase,
       solution: game.solution,
+      intro: game.intro,
       updatedAt: game.updated_at,
     },
+    introAudio: audioUrl(`/api/games/${game.code}/audio/intro`, game.intro),
+    tts: ttsEnabled(),
     characters: cast.map((c) => ({ ...c, claimed: claimed.has(c.id) })),
     clues,
     playerCount: (

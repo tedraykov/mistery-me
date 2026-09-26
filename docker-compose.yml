@@ -6,6 +6,9 @@ services:
       - "3000:3000"
     environment:
       DATA_DIR: /app/data
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
+      ELEVENLABS_MODEL_ID: ${ELEVENLABS_MODEL_ID:-}
     volumes:
       - mistery-data:/app/data
     restart: unless-stopped

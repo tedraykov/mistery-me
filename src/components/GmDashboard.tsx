@@ -8,11 +8,12 @@ import {
   draftFrom,
   emptyDraft,
 } from "@/components/CharacterEditor";
-import { PHASE_HINT, PHASE_LABEL, paragraphs } from "@/lib/format";
+import { ReadAloud } from "@/components/ReadAloud";
+import { PHASE_HINT, PHASE_LABEL, initial, paragraphs } from "@/lib/format";
 import { mutate, useGameState } from "@/lib/useGameState";
 import { PHASES, type GmView, type Phase } from "@/lib/types";
 
-type Tab = "cast" | "clues" | "solution" | "votes";
+type Tab = "intro" | "cast" | "clues" | "solution" | "votes";
 
 export function GmDashboard({ code }: { code: string }) {
   const { state, error, loading, apply } = useGameState(code, 4000);
@@ -73,6 +74,7 @@ export function GmDashboard({ code }: { code: string }) {
       <div className="tabs" role="tablist">
         {(
           [
+            ["intro", "Увод"],
             ["cast", `Герои (${v.characters.length})`],
             ["clues", `Улики (${v.clues.length})`],
             ["solution", "Решение"],
@@ -93,6 +95,7 @@ export function GmDashboard({ code }: { code: string }) {
 
       {actionError && <div className="alert">{actionError}</div>}
 
+      {tab === "intro" && <IntroTab view={v} busy={busy} send={send} code={code} />}
       {tab === "cast" && <CastTab view={v} busy={busy} send={send} code={code} />}
       {tab === "clues" && <CluesTab view={v} busy={busy} send={send} code={code} />}
       {tab === "solution" && <SolutionTab view={v} busy={busy} send={send} code={code} />}
@@ -121,45 +124,49 @@ function GmHeader({ view, busy, send }: { view: GmView; busy: boolean; send: Sen
 
   return (
     <header className="stack" style={{ marginTop: 8 }}>
-      <div className="row row-tight">
-        <span className="badge badge-amber">Водещ</span>
-        <span className="badge">
-          👥 {view.playerCount} {view.playerCount === 1 ? "играч" : "играчи"}
-        </span>
-      </div>
-      <h1>{view.game.title}</h1>
-
-      <div className="panel stack-sm">
-        <div className="eyebrow">Код за присъединяване</div>
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <span className="code-display">{code}</span>
-          <div className="row row-tight">
-            <button className="btn btn-sm" onClick={() => copy(code, "code")}>
-              {copied === "code" ? "✓ Копиран" : "Копирай кода"}
-            </button>
-            <button className="btn btn-sm" onClick={() => copy(joinUrl, "link")}>
-              {copied === "link" ? "✓ Копиран" : "Копирай линка"}
-            </button>
-          </div>
+      <div className="stack-sm">
+        <h1>{view.game.title}</h1>
+        <div className="join-line">
+          <span className="badge badge-amber">Водещ</span>
+          <span>
+            Код <span className="code-chip">{code}</span>
+          </span>
+          <button className="link-btn" onClick={() => copy(code, "code")}>
+            {copied === "code" ? "✓ копиран" : "копирай"}
+          </button>
+          <span aria-hidden>·</span>
+          <button className="link-btn" onClick={() => copy(joinUrl, "link")}>
+            {copied === "link" ? "✓ копиран" : "копирай линка"}
+          </button>
+          <span aria-hidden>·</span>
+          <span>
+            👥 {view.playerCount} {view.playerCount === 1 ? "играч" : "играчи"}
+          </span>
         </div>
-        <p className="hint">Играчите отварят сайта, въвеждат кода и си избират роля.</p>
       </div>
 
       <div className="panel stack-sm">
-        <div className="eyebrow">Фаза на играта</div>
-        <div className="row row-tight">
-          {PHASES.map((p) => (
-            <button
-              key={p}
-              className={`btn btn-sm ${view.game.phase === p ? "btn-primary" : ""}`}
-              disabled={busy}
-              onClick={() => send(`/api/games/${view.game.code}`, "PATCH", { phase: p })}
-            >
-              {PHASE_LABEL[p]}
-            </button>
-          ))}
-        </div>
-        <p className="hint">{PHASE_HINT[view.game.phase]}</p>
+        <ol className="phases">
+          {PHASES.map((p, i) => {
+            const current = PHASES.indexOf(view.game.phase);
+            const state = i < current ? "done" : i === current ? "current" : "todo";
+            return (
+              <li key={p} className="phase" data-state={state}>
+                <button
+                  type="button"
+                  disabled={busy || i === current}
+                  aria-current={i === current ? "step" : undefined}
+                  onClick={() => send(`/api/games/${code}`, "PATCH", { phase: p })}
+                >
+                  <span className="phase-dot">{i < current ? "✓" : i + 1}</span>
+                  <span className="phase-label">{PHASE_LABEL[p]}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+        <p className="phase-now">{PHASE_LABEL[view.game.phase]}</p>
+        <p className="hint center">{PHASE_HINT[view.game.phase]}</p>
       </div>
     </header>
   );
@@ -229,7 +236,7 @@ function CastTab({
     <div className="stack">
       {view.characters.length === 0 && !adding && (
         <div className="notice">
-          Още няма герои. Добави по един за всеки участник — с история, тайна и цел.
+          Още няма герои. Добави по един за всеки участник — с описание, тайна и цел.
         </div>
       )}
 
@@ -249,10 +256,9 @@ function CastTab({
           </div>
         ) : (
           <div key={c.id} className="pick-item" style={{ cursor: "default" }}>
-            <span className="em">{c.emoji || "🎭"}</span>
+            <span className="em">{initial(c.name)}</span>
             <span className="stack" style={{ gap: 3, flex: 1, minWidth: 0 }}>
               <span className="nm">{c.name}</span>
-              {c.role && <span className="faint">{c.role}</span>}
               <span className="row row-tight" style={{ marginTop: 2 }}>
                 {c.claimed ? (
                   <span className="badge badge-teal">Заета от играч</span>
@@ -260,7 +266,7 @@ function CastTab({
                   <span className="badge">Свободна</span>
                 )}
                 {c.is_culprit === 1 && <span className="badge badge-blood">🔪 Виновен</span>}
-                {!c.secret.trim() && <span className="badge">Без тайна</span>}
+                {!c.description.trim() && <span className="badge">Без описание</span>}
               </span>
             </span>
             <span className="row row-tight">
@@ -307,6 +313,60 @@ function CastTab({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Intro story ───────────────────────────────────────────────── */
+function IntroTab({
+  view,
+  busy,
+  send,
+  code,
+}: {
+  view: GmView;
+  busy: boolean;
+  send: Send;
+  code: string;
+}) {
+  const [text, setText] = useState(view.game.intro);
+  const [saved, setSaved] = useState(false);
+  const dirty = text !== view.game.intro;
+
+  async function save() {
+    if (await send(`/api/games/${code}`, "PATCH", { intro: text })) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
+  }
+
+  return (
+    <div className="stack">
+      <div className="panel stack">
+        <div className="eyebrow">Играчите го виждат щом отвориш за роли</div>
+        <h2>📜 Историята</h2>
+        <label className="field">
+          <span>Уводът, с който започва вечерта</span>
+          <textarea
+            value={text}
+            maxLength={10000}
+            style={{ minHeight: 260 }}
+            placeholder="Събота вечер. Иван събира старите приятели във вилата си край Боровец…"
+            onChange={(e) => setText(e.target.value)}
+          />
+        </label>
+        <div className="row">
+          <button className="btn btn-primary" onClick={save} disabled={busy || !dirty}>
+            {busy ? "Запазваме…" : saved ? "✓ Запазено" : "Запази увода"}
+          </button>
+          {!dirty && <ReadAloud src={view.introAudio} label="Чуй увода" />}
+        </div>
+        {!view.tts && (
+          <p className="hint">
+            Четенето на глас е изключено — задай ELEVENLABS_API_KEY на сървъра, за да го включиш.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -361,6 +421,7 @@ function CluesTab({
             ))}
           </div>
           <div className="row row-tight">
+            <ReadAloud src={c.audio} />
             <button
               className={`btn btn-sm ${c.released_at ? "" : "btn-primary"}`}
               disabled={busy}
@@ -406,7 +467,7 @@ function CluesTab({
             <option value="all">📣 Всички играчи</option>
             {view.characters.map((c) => (
               <option key={c.id} value={c.id}>
-                ✉️ Само за {c.emoji} {c.name}
+                ✉️ Само за {c.name}
               </option>
             ))}
           </select>
@@ -451,7 +512,7 @@ function SolutionTab({
           <div className="row row-tight">
             {culprits.map((c) => (
               <span key={c.id} className="badge badge-blood">
-                🔪 {c.emoji} {c.name}
+                🔪 {c.name}
               </span>
             ))}
           </div>

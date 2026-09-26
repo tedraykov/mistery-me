@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CharacterCard } from "@/components/CharacterCard";
-import { PHASE_LABEL, paragraphs } from "@/lib/format";
+import { ReadAloud } from "@/components/ReadAloud";
+import { PHASE_LABEL, initial, paragraphs } from "@/lib/format";
 import { mutate, useGameState } from "@/lib/useGameState";
 import type { PlayerView } from "@/lib/types";
 
-type Tab = "role" | "clues" | "cast";
+type Tab = "story" | "role" | "clues" | "cast";
 
 export function PlayerGame({ code }: { code: string }) {
   const { state, error, loading, apply } = useGameState(code);
-  const [tab, setTab] = useState<Tab>("role");
+  const [tabChoice, setTab] = useState<Tab>("role");
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -72,6 +73,7 @@ export function PlayerGame({ code }: { code: string }) {
     return (
       <main className="shell stack">
         <GameHeader view={v} />
+        <IntroPanel view={v} />
         <div className="panel stack">
           <div className="eyebrow">Стъпка 1</div>
           <h2>Кой си ти?</h2>
@@ -90,10 +92,9 @@ export function PlayerGame({ code }: { code: string }) {
                   disabled={c.claimed || busy !== null}
                   onClick={() => claim(c.id)}
                 >
-                  <span className="em">{c.emoji || "🎭"}</span>
-                  <span className="stack" style={{ gap: 2, flex: 1 }}>
-                    <span className="nm">{c.name}</span>
-                    {c.role && <span className="faint">{c.role}</span>}
+                  <span className="em">{initial(c.name)}</span>
+                  <span className="nm" style={{ flex: 1 }}>
+                    {c.name}
                   </span>
                   {c.claimed ? (
                     <span className="badge">Заето</span>
@@ -111,11 +112,18 @@ export function PlayerGame({ code }: { code: string }) {
 
   /* ── In game ─────────────────────────────────────────────────── */
   const me = v.me;
+  // The story tab only exists while there is an intro.
+  const tab = tabChoice === "story" && !v.intro.trim() ? "role" : tabChoice;
   return (
     <main className="shell stack">
       <GameHeader view={v} />
 
       <div className="tabs" role="tablist">
+        {v.intro.trim() && (
+          <button role="tab" aria-selected={tab === "story"} className="tab" onClick={() => setTab("story")}>
+            Историята
+          </button>
+        )}
         <button role="tab" aria-selected={tab === "role"} className="tab" onClick={() => setTab("role")}>
           Моята роля
         </button>
@@ -128,6 +136,8 @@ export function PlayerGame({ code }: { code: string }) {
       </div>
 
       {actionError && <div className="alert">{actionError}</div>}
+
+      {tab === "story" && <IntroPanel view={v} />}
 
       {tab === "role" && (
         <>
@@ -148,6 +158,8 @@ export function PlayerGame({ code }: { code: string }) {
                 <div className="row row-tight">
                   <span className="badge badge-amber">🔍 Улика</span>
                   {c.forMe && <span className="badge badge-blood">Само за теб</span>}
+                  <span className="spacer" />
+                  <ReadAloud src={c.audio} />
                 </div>
                 {c.title && <h3>{c.title}</h3>}
                 <div className="section-body">
@@ -165,11 +177,9 @@ export function PlayerGame({ code }: { code: string }) {
         <div className="pick">
           {v.cast.map((c) => (
             <div key={c.id} className="pick-item" style={{ cursor: "default" }}>
-              <span className="em">{c.emoji || "🎭"}</span>
-              <span className="stack" style={{ gap: 2, flex: 1 }}>
-                <span className="nm">{c.name}</span>
-                {c.role && <span className="faint">{c.role}</span>}
-                {c.pair && <span className="faint">Двойка с: {c.pair}</span>}
+              <span className="em">{initial(c.name)}</span>
+              <span className="nm" style={{ flex: 1 }}>
+                {c.name}
               </span>
               {c.id === me.id && <span className="badge badge-amber">Ти</span>}
             </div>
@@ -192,6 +202,23 @@ function GameHeader({ view }: { view: PlayerView }) {
       </div>
       <h1>{view.game.title}</h1>
     </header>
+  );
+}
+
+function IntroPanel({ view }: { view: PlayerView }) {
+  if (!view.intro.trim()) return null;
+  return (
+    <div className="panel stack-sm">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <div className="eyebrow">📜 Историята</div>
+        <ReadAloud src={view.introAudio} />
+      </div>
+      <div className="section-body">
+        {paragraphs(view.intro).map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -241,7 +268,7 @@ function VotePanel({
             .filter((c) => c.id !== view.me?.id)
             .map((c) => (
               <option key={c.id} value={c.id}>
-                {c.emoji} {c.name}
+                {c.name}
               </option>
             ))}
         </select>
@@ -276,7 +303,7 @@ function RevealPanel({ view }: { view: PlayerView }) {
           <div className="row row-tight">
             {culprits.map((c) => (
               <span key={c.id} className="badge badge-blood">
-                {c.emoji} {c.name} — виновен
+                {c.name} — виновен
               </span>
             ))}
           </div>
@@ -309,5 +336,5 @@ function RevealPanel({ view }: { view: PlayerView }) {
 
 function nameOf(view: PlayerView, characterId: string): string {
   const c = view.cast.find((x) => x.id === characterId);
-  return c ? `${c.emoji} ${c.name}`.trim() : "—";
+  return c?.name ?? "—";
 }

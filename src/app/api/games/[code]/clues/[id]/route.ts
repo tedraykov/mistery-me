@@ -2,6 +2,8 @@ import { HttpError, errorResponse, requireGm } from "@/lib/auth";
 import { json, str } from "@/lib/body";
 import { get, run, touchGame } from "@/lib/db";
 import { buildGmView } from "@/lib/state";
+import { clueSpeech, warm } from "@/lib/tts";
+import type { ClueRow } from "@/lib/types";
 
 export async function PATCH(
   req: Request,
@@ -33,6 +35,9 @@ export async function PATCH(
         body.released ? Date.now() : null,
         clueId,
       );
+      // Synthesize now so players' play buttons respond instantly.
+      const clue = get<ClueRow>("SELECT * FROM clues WHERE id = ?", clueId);
+      if (body.released && clue) warm(clueSpeech(clue));
     }
 
     touchGame(game.id);
