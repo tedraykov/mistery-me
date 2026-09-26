@@ -8,12 +8,14 @@ import {
   draftFrom,
   emptyDraft,
 } from "@/components/CharacterEditor";
+import { CharacterCard } from "@/components/CharacterCard";
+import { ClueTimerPanel } from "@/components/ClueTimer";
 import { ReadAloud } from "@/components/ReadAloud";
 import { PHASE_HINT, PHASE_LABEL, initial, paragraphs } from "@/lib/format";
 import { mutate, useGameState } from "@/lib/useGameState";
 import { PHASES, type GmView, type Phase } from "@/lib/types";
 
-type Tab = "intro" | "cast" | "clues" | "solution" | "votes";
+type Tab = "intro" | "cast" | "victim" | "solution" | "votes";
 
 export function GmDashboard({ code }: { code: string }) {
   const { state, error, loading, apply } = useGameState(code, 4000);
@@ -76,7 +78,7 @@ export function GmDashboard({ code }: { code: string }) {
           [
             ["intro", "Увод"],
             ["cast", `Герои (${v.characters.length})`],
-            ["clues", `Улики (${v.clues.length})`],
+            ["victim", "☠️ Моята роля"],
             ["solution", "Решение"],
             ["votes", `Гласове (${v.voterCount})`],
           ] as [Tab, string][]
@@ -95,9 +97,11 @@ export function GmDashboard({ code }: { code: string }) {
 
       {actionError && <div className="alert">{actionError}</div>}
 
+      {v.timer && <ClueTimerPanel timer={v.timer} busy={busy} send={send} code={code} />}
+
       {tab === "intro" && <IntroTab view={v} busy={busy} send={send} code={code} />}
       {tab === "cast" && <CastTab view={v} busy={busy} send={send} code={code} />}
-      {tab === "clues" && <CluesTab view={v} busy={busy} send={send} code={code} />}
+      {tab === "victim" && <VictimTab view={v} />}
       {tab === "solution" && <SolutionTab view={v} busy={busy} send={send} code={code} />}
       {tab === "votes" && <VotesTab view={v} busy={busy} send={send} code={code} />}
     </main>
@@ -236,7 +240,7 @@ function CastTab({
     <div className="stack">
       {view.characters.length === 0 && !adding && (
         <div className="notice">
-          Още няма герои. Добави по един за всеки участник — с описание, тайна и цел.
+          Още няма герои. Добави по един за всеки участник — и един за убития, когото играеш ти.
         </div>
       )}
 
@@ -255,12 +259,14 @@ function CastTab({
             />
           </div>
         ) : (
-          <div key={c.id} className="pick-item" style={{ cursor: "default" }}>
+          <div key={c.id} className="pick-item cast-row" style={{ cursor: "default" }}>
             <span className="em">{initial(c.name)}</span>
-            <span className="stack" style={{ gap: 3, flex: 1, minWidth: 0 }}>
+            <span className="stack" style={{ gap: 3, flex: "1 1 150px", minWidth: 0 }}>
               <span className="nm">{c.name}</span>
               <span className="row row-tight" style={{ marginTop: 2 }}>
-                {c.claimed ? (
+                {c.is_victim === 1 ? (
+                  <span className="badge badge-violet">☠️ Убитият — ти</span>
+                ) : c.claimed ? (
                   <span className="badge badge-teal">Заета от играч</span>
                 ) : (
                   <span className="badge">Свободна</span>
@@ -371,112 +377,22 @@ function IntroTab({
   );
 }
 
-/* ── Clues ─────────────────────────────────────────────────────── */
-function CluesTab({
-  view,
-  busy,
-  send,
-  code,
-}: {
-  view: GmView;
-  busy: boolean;
-  send: Send;
-  code: string;
-}) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [target, setTarget] = useState("all");
-
-  async function add() {
-    if (await send(`/api/games/${code}/clues`, "POST", { title, body, target })) {
-      setTitle("");
-      setBody("");
-      setTarget("all");
-    }
-  }
-
-  return (
-    <div className="stack">
+/* ── The victim — the game master's own role ──────────────────── */
+function VictimTab({ view }: { view: GmView }) {
+  const victim = view.characters.find((c) => c.is_victim === 1);
+  if (!victim) {
+    return (
       <div className="notice">
-        Улика стои скрита докато не я пуснеш. Щом я пуснеш, се появява при играчите сама — без да
-        презареждат.
+        Още няма убит. Добави героя на убития в „Герои“ и сложи чекчето „Това е убитият“ — него го
+        играеш ти, а уликите му са в описанието.
       </div>
-
-      {view.clues.map((c) => (
-        <div key={c.id} className="panel stack-sm">
-          <div className="row row-tight">
-            {c.released_at ? (
-              <span className="badge badge-teal">Пусната</span>
-            ) : (
-              <span className="badge">Чернова</span>
-            )}
-            <span className="badge badge-violet">
-              {c.target === "all" ? "📣 Всички" : `✉️ ${c.targetName}`}
-            </span>
-          </div>
-          {c.title && <h3>{c.title}</h3>}
-          <div className="section-body">
-            {paragraphs(c.body).map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
-          </div>
-          <div className="row row-tight">
-            <ReadAloud src={c.audio} />
-            <button
-              className={`btn btn-sm ${c.released_at ? "" : "btn-primary"}`}
-              disabled={busy}
-              onClick={() => send(`/api/games/${code}/clues/${c.id}`, "PATCH", { released: !c.released_at })}
-            >
-              {c.released_at ? "Скрий отново" : "🚀 Пусни сега"}
-            </button>
-            <span className="spacer" />
-            <button
-              className="btn btn-sm btn-danger"
-              disabled={busy}
-              onClick={() => send(`/api/games/${code}/clues/${c.id}`, "DELETE")}
-            >
-              Изтрий
-            </button>
-          </div>
-        </div>
-      ))}
-
-      <div className="panel stack">
-        <div className="eyebrow">Нова улика</div>
-        <label className="field">
-          <span>Заглавие</span>
-          <input
-            type="text"
-            value={title}
-            maxLength={160}
-            placeholder="Намерен е ключ в саксията"
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Текст</span>
-          <textarea
-            value={body}
-            placeholder="Под саксията на терасата има ключ за избата. По него има кръв…"
-            onChange={(e) => setBody(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>За кого</span>
-          <select value={target} onChange={(e) => setTarget(e.target.value)}>
-            <option value="all">📣 Всички играчи</option>
-            {view.characters.map((c) => (
-              <option key={c.id} value={c.id}>
-                ✉️ Само за {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="btn" onClick={add} disabled={busy || !body.trim()}>
-          Запази като чернова
-        </button>
-      </div>
-    </div>
+    );
+  }
+  return (
+    <CharacterCard
+      c={{ ...victim, claimed: false, isVictim: true }}
+      cluesRead={view.game.cluesRead}
+    />
   );
 }
 

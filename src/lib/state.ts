@@ -1,10 +1,10 @@
 import { all, get } from "./db";
-import { audioUrl, clueSpeech, ttsEnabled } from "./tts";
+import { CLUE_INTERVAL_MS, victimClues } from "./format";
+import { audioUrl, ttsEnabled } from "./tts";
 import type {
   CharacterRow,
-  ClueRow,
+  ClueTimer,
   GameRow,
-  GmClue,
   GmView,
   PlayerRow,
   PlayerView,
@@ -32,20 +32,6 @@ export function buildPlayerView(game: GameRow, player: PlayerRow): PlayerView {
   const revealed = game.phase === "revealed";
 
   const mine = cast.find((c) => c.id === player.character_id) ?? null;
-
-  const clues = all<ClueRow>(
-    "SELECT * FROM clues WHERE game_id = ? AND released_at IS NOT NULL ORDER BY released_at",
-    game.id,
-  )
-    .filter((c) => c.target === "all" || c.target === player.character_id)
-    .map((c) => ({
-      id: c.id,
-      title: c.title,
-      body: c.body,
-      forMe: c.target !== "all",
-      releasedAt: c.released_at!,
-      audio: audioUrl(`/api/games/${game.code}/audio/clues/${c.id}`, clueSpeech(c)),
-    }));
 
   const vote = get<VoteRow>(
     "SELECT * FROM votes WHERE game_id = ? AND player_id = ?",
@@ -77,14 +63,15 @@ export function buildPlayerView(game: GameRow, player: PlayerRow): PlayerView {
       id: mine.id,
       name: mine.name,
       claimed: true,
+      isVictim: mine.is_victim === 1,
       description: mine.description,
     },
     cast: cast.map((c) => ({
       id: c.id,
       name: c.name,
       claimed: claimed.has(c.id),
+      isVictim: c.is_victim === 1,
     })),
-    clues,
     myVote: vote ? { characterId: vote.character_id, reason: vote.reason } : null,
     solution: revealed ? game.solution : null,
     culpritIds: revealed ? cast.filter((c) => c.is_culprit === 1).map((c) => c.id) : null,
@@ -92,19 +79,37 @@ export function buildPlayerView(game: GameRow, player: PlayerRow): PlayerView {
   };
 }
 
+/** Route that reads the victim's clue number `n` (1-based) aloud. */
+export const clueAudioRoute = (code: string, n: number) => `/api/games/${code}/audio/clue/${n}`;
+
+function clueTimer(game: GameRow, cast: CharacterRow[]): ClueTimer | null {
+  const victim = cast.find((c) => c.is_victim === 1);
+  if (!victim || game.phase !== "playing" || game.clue_round_started_at === null) return null;
+
+  const clues = victimClues(victim.description);
+  const nextIndex = game.clues_read;
+  const nextText = clues[nextIndex];
+  return {
+    roundStartedAt: game.clue_round_started_at,
+    serverNow: Date.now(),
+    intervalMs: CLUE_INTERVAL_MS,
+    cluesRead: game.clues_read,
+    total: clues.length,
+    next:
+      nextText === undefined
+        ? null
+        : {
+            number: nextIndex + 1,
+            text: nextText,
+            audio: audioUrl(clueAudioRoute(game.code, nextIndex + 1), nextText),
+          },
+  };
+}
+
 export function buildGmView(game: GameRow): GmView {
   const cast = characters(game.id);
   const claimed = claimedIds(game.id);
   const byId = new Map(cast.map((c) => [c.id, c]));
-
-  const clues: GmClue[] = all<ClueRow>(
-    "SELECT * FROM clues WHERE game_id = ? ORDER BY sort_order, created_at",
-    game.id,
-  ).map((c) => ({
-    ...c,
-    targetName: c.target === "all" ? "Всички" : (byId.get(c.target)?.name ?? "—"),
-    audio: audioUrl(`/api/games/${game.code}/audio/clues/${c.id}`, clueSpeech(c)),
-  }));
 
   const voteRows = all<VoteRow>("SELECT * FROM votes WHERE game_id = ?", game.id);
   const grouped = new Map<string, { votes: number; reasons: string[] }>();
@@ -123,12 +128,13 @@ export function buildGmView(game: GameRow): GmView {
       phase: game.phase,
       solution: game.solution,
       intro: game.intro,
+      cluesRead: game.clues_read,
       updatedAt: game.updated_at,
     },
     introAudio: audioUrl(`/api/games/${game.code}/audio/intro`, game.intro),
     tts: ttsEnabled(),
     characters: cast.map((c) => ({ ...c, claimed: claimed.has(c.id) })),
-    clues,
+    timer: clueTimer(game, cast),
     playerCount: (
       get<{ n: number }>("SELECT COUNT(*) AS n FROM players WHERE game_id = ?", game.id) ?? {
         n: 0,

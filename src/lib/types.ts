@@ -10,6 +10,8 @@ export interface GameRow {
   phase: Phase;
   solution: string;
   intro: string;
+  clue_round_started_at: number | null;
+  clues_read: number;
   created_at: number;
   updated_at: number;
 }
@@ -20,6 +22,7 @@ export interface CharacterRow {
   name: string;
   description: string;
   is_culprit: number;
+  is_victim: number;
   sort_order: number;
 }
 
@@ -30,18 +33,6 @@ export interface PlayerRow {
   character_id: string | null;
   joined_at: number;
   last_seen: number;
-}
-
-export interface ClueRow {
-  id: string;
-  game_id: string;
-  title: string;
-  body: string;
-  /** "all" or a character id */
-  target: string;
-  released_at: number | null;
-  sort_order: number;
-  created_at: number;
 }
 
 export interface VoteRow {
@@ -57,21 +48,13 @@ export interface CharacterPublic {
   id: string;
   name: string;
   claimed: boolean;
+  /** The murdered character, played by the game master — nobody can pick it. */
+  isVictim: boolean;
 }
 
 /** Everything the owning player (or the GM) may read. */
 export interface CharacterPrivate extends CharacterPublic {
   description: string;
-}
-
-export interface CluePublic {
-  id: string;
-  title: string;
-  body: string;
-  forMe: boolean;
-  releasedAt: number;
-  /** Read-aloud URL, or null when narration is off. */
-  audio: string | null;
 }
 
 export interface PlayerView {
@@ -83,16 +66,22 @@ export interface PlayerView {
   introAudio: string | null;
   me: CharacterPrivate | null;
   cast: CharacterPublic[];
-  clues: CluePublic[];
   myVote: { characterId: string; reason: string } | null;
   solution: string | null;
   culpritIds: string[] | null;
   tally: { characterId: string; votes: number }[] | null;
 }
 
-export interface GmClue extends ClueRow {
-  targetName: string;
-  audio: string | null;
+/** The victim's clue reminder. Only ever sent to the game master. */
+export interface ClueTimer {
+  /** Server time the current round started; compare against `serverNow`, not the local clock. */
+  roundStartedAt: number;
+  serverNow: number;
+  intervalMs: number;
+  cluesRead: number;
+  /** Clues found in the victim's description (paragraphs starting with "Улика"). */
+  total: number;
+  next: { number: number; text: string; audio: string | null } | null;
 }
 
 export interface GmView {
@@ -103,12 +92,14 @@ export interface GmView {
     phase: Phase;
     solution: string;
     intro: string;
+    cluesRead: number;
     updatedAt: number;
   };
   introAudio: string | null;
   tts: boolean;
   characters: (CharacterRow & { claimed: boolean })[];
-  clues: GmClue[];
+  /** Present while the game is being played and a victim exists. */
+  timer: ClueTimer | null;
   playerCount: number;
   votes: { characterId: string; characterName: string; votes: number; reasons: string[] }[];
   voterCount: number;

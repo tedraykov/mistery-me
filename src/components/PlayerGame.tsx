@@ -8,7 +8,7 @@ import { PHASE_LABEL, initial, paragraphs } from "@/lib/format";
 import { mutate, useGameState } from "@/lib/useGameState";
 import type { PlayerView } from "@/lib/types";
 
-type Tab = "story" | "role" | "clues" | "cast";
+type Tab = "story" | "role" | "cast";
 
 export function PlayerGame({ code }: { code: string }) {
   const { state, error, loading, apply } = useGameState(code);
@@ -37,7 +37,8 @@ export function PlayerGame({ code }: { code: string }) {
   }
 
   const v: PlayerView = state;
-  const unseenClues = v.clues.length;
+  // The victim is the game master's role: listed in the cast, but nobody can pick or accuse them.
+  const pickable = v.cast.filter((c) => !c.isVictim);
 
   async function claim(characterId: string) {
     setBusy(characterId);
@@ -81,11 +82,11 @@ export function PlayerGame({ code }: { code: string }) {
             Избери своя герой. Само ти ще виждаш неговата история, тайна и цел.
           </p>
           {actionError && <div className="alert">{actionError}</div>}
-          {v.cast.length === 0 ? (
+          {pickable.length === 0 ? (
             <div className="notice">Водещият още не е добавил герои.</div>
           ) : (
             <div className="pick">
-              {v.cast.map((c) => (
+              {pickable.map((c) => (
                 <button
                   key={c.id}
                   className="pick-item"
@@ -127,9 +128,6 @@ export function PlayerGame({ code }: { code: string }) {
         <button role="tab" aria-selected={tab === "role"} className="tab" onClick={() => setTab("role")}>
           Моята роля
         </button>
-        <button role="tab" aria-selected={tab === "clues"} className="tab" onClick={() => setTab("clues")}>
-          Улики{unseenClues > 0 ? ` (${unseenClues})` : ""}
-        </button>
         <button role="tab" aria-selected={tab === "cast"} className="tab" onClick={() => setTab("cast")}>
           Кой кой е
         </button>
@@ -148,31 +146,6 @@ export function PlayerGame({ code }: { code: string }) {
         </>
       )}
 
-      {tab === "clues" && (
-        <div className="stack">
-          {v.clues.length === 0 ? (
-            <div className="notice">Още няма улики. Ще се появят тук щом водещият ги пусне.</div>
-          ) : (
-            v.clues.map((c) => (
-              <div key={c.id} className="panel stack-sm">
-                <div className="row row-tight">
-                  <span className="badge badge-amber">🔍 Улика</span>
-                  {c.forMe && <span className="badge badge-blood">Само за теб</span>}
-                  <span className="spacer" />
-                  <ReadAloud src={c.audio} />
-                </div>
-                {c.title && <h3>{c.title}</h3>}
-                <div className="section-body">
-                  {paragraphs(c.body).map((p, i) => (
-                    <p key={i}>{p}</p>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
       {tab === "cast" && (
         <div className="pick">
           {v.cast.map((c) => (
@@ -182,6 +155,7 @@ export function PlayerGame({ code }: { code: string }) {
                 {c.name}
               </span>
               {c.id === me.id && <span className="badge badge-amber">Ти</span>}
+              {c.isVictim && <span className="badge badge-violet">☠️ Убитият</span>}
             </div>
           ))}
         </div>
@@ -265,7 +239,7 @@ function VotePanel({
         <select value={choice} onChange={(e) => setChoice(e.target.value)}>
           <option value="">— избери —</option>
           {view.cast
-            .filter((c) => c.id !== view.me?.id)
+            .filter((c) => c.id !== view.me?.id && !c.isVictim)
             .map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}

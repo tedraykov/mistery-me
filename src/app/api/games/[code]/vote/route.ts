@@ -17,9 +17,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
     const body = await json(req);
     const characterId = str(body, "characterId", { max: 64 }).trim();
     const reason = str(body, "reason", { max: 2000 }).trim();
-    if (!get("SELECT 1 FROM characters WHERE id = ? AND game_id = ?", characterId, game.id)) {
-      throw new HttpError(404, "Няма такъв герой");
-    }
+    const accused = get<{ is_victim: number }>(
+      "SELECT is_victim FROM characters WHERE id = ? AND game_id = ?",
+      characterId,
+      game.id,
+    );
+    if (!accused) throw new HttpError(404, "Няма такъв герой");
+    if (accused.is_victim) throw new HttpError(400, "Убитият не може да е убиецът");
 
     run(
       `INSERT INTO votes (game_id, player_id, character_id, reason, created_at)

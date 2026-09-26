@@ -2,24 +2,28 @@
 
 import { useState } from "react";
 import { CharacterCard } from "@/components/CharacterCard";
+import { victimClues } from "@/lib/format";
 import type { CharacterRow } from "@/lib/types";
 
 export interface CharacterDraft {
   name: string;
   description: string;
   isCulprit: boolean;
+  isVictim: boolean;
 }
 
 export const emptyDraft = (): CharacterDraft => ({
   name: "",
   description: "",
   isCulprit: false,
+  isVictim: false,
 });
 
 export const draftFrom = (c: CharacterRow): CharacterDraft => ({
   name: c.name,
   description: c.description,
   isCulprit: c.is_culprit === 1,
+  isVictim: c.is_victim === 1,
 });
 
 const MAX_DESCRIPTION = 8000;
@@ -94,6 +98,8 @@ export function CharacterEditor({
     );
   }
 
+  const clueCount = draft.isVictim ? victimClues(draft.description).length : 0;
+
   if (preview) {
     return (
       <div className="stack">
@@ -104,6 +110,7 @@ export function CharacterEditor({
           c={{
             id: "preview",
             claimed: false,
+            isVictim: draft.isVictim,
             name: draft.name || "БЕЗ ИМЕ",
             description: draft.description,
           }}
@@ -132,13 +139,23 @@ export function CharacterEditor({
           maxLength={MAX_DESCRIPTION}
           style={{ minHeight: 260 }}
           placeholder={
-            "ИТ консултант, 35 г. Двойка с Ива.\n\nСпокоен, наблюдателен, обичаш да стоиш отстрани и да гледаш хората.\n\nТвоята тайна: преди година зае от Иван 6000 лв. за стартъп, който се провали…"
+            draft.isVictim
+              ? "Иван, 40 г., домакинът на вечерта.\n\nТвоята история…\n\nУлика 1: Под саксията на терасата има ключ за избата.\n\nУлика 2: …"
+              : "ИТ консултант, 35 г. Двойка с Ива.\n\nСпокоен, наблюдателен, обичаш да стоиш отстрани и да гледаш хората.\n\nТвоята тайна: преди година зае от Иван 6000 лв. за стартъп, който се провали…"
           }
           onChange={(e) => set("description", e.target.value)}
         />
-        <span className="hint">
-          Всичко, което играчът трябва да знае — кой е, история, тайна, цел. Празен ред започва нов абзац.
-        </span>
+        {draft.isVictim ? (
+          <span className={clueCount > 0 ? "hint" : "hint hint-warn"}>
+            Всеки абзац, който започва с „Улика“, е улика — таймерът ти ги подава една по една.{" "}
+            <b>Намерени улики: {clueCount}</b>
+          </span>
+        ) : (
+          <span className="hint">
+            Всичко, което играчът трябва да знае — кой е, история, тайна, цел. Празен ред започва нов
+            абзац.
+          </span>
+        )}
       </label>
 
       <div className="row row-tight">
@@ -153,14 +170,36 @@ export function CharacterEditor({
         )}
       </div>
 
-      <label className="toggle">
-        <input
-          type="checkbox"
-          checked={draft.isCulprit}
-          onChange={(e) => set("isCulprit", e.target.checked)}
-        />
-        🔪 Този герой е виновният (вижда се само от теб, до разкритието)
-      </label>
+      <div className="stack-sm">
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={draft.isVictim}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                isVictim: e.target.checked,
+                isCulprit: e.target.checked ? false : draft.isCulprit,
+              })
+            }
+          />
+          ☠️ Това е убитият — играе го водещият, в описанието му са уликите
+        </label>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={draft.isCulprit}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                isCulprit: e.target.checked,
+                isVictim: e.target.checked ? false : draft.isVictim,
+              })
+            }
+          />
+          🔪 Този герой е виновният (вижда се само от теб, до разкритието)
+        </label>
+      </div>
 
       <div className="row">
         <button className="btn btn-primary" onClick={onSave} disabled={busy || !draft.name.trim()}>

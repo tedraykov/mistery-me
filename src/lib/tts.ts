@@ -6,7 +6,7 @@ import { dataDir } from "./db";
 
 /**
  * Read-aloud via ElevenLabs text-to-speech. Each distinct text is synthesized once and cached as
- * an mp3 under DATA_DIR/tts, so replaying a clue on ten phones costs one API call.
+ * an mp3 under DATA_DIR/tts, so replaying the intro on ten phones costs one API call.
  */
 
 const API = "https://api.elevenlabs.io/v1/text-to-speech";
@@ -32,14 +32,6 @@ export function audioUrl(route: string, text: string): string | null {
   return `${route}?v=${audioKey(text).slice(0, 16)}`;
 }
 
-/** What gets read for a clue: its title as a sentence, then the body. */
-export function clueSpeech(clue: { title: string; body: string }): string {
-  const title = clue.title.trim();
-  const body = clue.body.trim();
-  if (!title) return body;
-  return `${/[.!?…]$/.test(title) ? title : `${title}.`}\n\n${body}`;
-}
-
 const inflight = new Map<string, Promise<Buffer>>();
 
 export async function speech(text: string): Promise<Buffer> {
@@ -53,7 +45,7 @@ export async function speech(text: string): Promise<Buffer> {
     // not cached yet
   }
 
-  // Several players hitting play on a fresh clue at once should share one synthesis.
+  // Several players hitting play at once on fresh text should share one synthesis.
   let pending = inflight.get(key);
   if (!pending) {
     pending = synthesize(text)

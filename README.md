@@ -2,8 +2,9 @@
 
 A self-hosted web app for running a murder-mystery party. The game master writes the
 introduction story and a plain-text description for each character; players join with a
-6-character code, claim their role, and see **only their own** card. Mid-game the GM can drop clues
-(to everyone or to one player), open voting, and finally reveal the solution. The intro and the
+6-character code, claim their role, and see **only their own** card. The GM also plays the
+**victim**, whose description holds the clues: every 25 minutes a timer (only the GM sees it)
+reminds them to read the next one aloud. Then voting, and finally the solution. The intro and the
 clues can be read aloud through ElevenLabs.
 
 UI language: **Bulgarian**.
@@ -14,14 +15,34 @@ UI language: **Bulgarian**.
 
 | | |
 |---|---|
-| **1. Подготовка** | GM creates a game, gets a 6-char code, writes the intro story („Увод“) and one character per guest. Nobody else can see anything yet. |
+| **1. Подготовка** | GM creates a game, gets a 6-char code, writes the intro story („Увод“), one character per guest, and the victim — their own role, with the clues in its description. Nobody else can see anything yet. |
 | **2. Разпределяне на роли** | Players open the site, type the code, read the intro, and pick their character from the cast list. A taken role can't be picked twice. |
-| **3. Играта върви** | Everyone reads their own card. The GM releases clues — they appear on players' phones on their own. |
+| **3. Играта върви** | Everyone reads their own card. Every 25 minutes the GM's timer rings and shows the victim's next clue to read out; they can also read one early. |
 | **4. Гласуване** | Each player accuses someone and optionally writes why. The GM watches the tally live. |
 | **5. Разкритие** | The solution, the real culprit(s) and the full vote tally become visible to everyone. |
 
 A character is just a name and one free-text description (blank line = new paragraph) holding
-everything the player needs — who they are, backstory, secret, goal.
+everything the player needs — who they are, backstory, secret, goal. The description can also be
+uploaded from a `.txt` file (UTF-8, UTF-16 or Windows-1251).
+
+### The victim and the clue timer
+
+One character is marked **☠️ убитият**. The GM plays them: players see them in the cast but can't
+pick or accuse them, and the GM gets their card under „☠️ Моята роля“.
+
+Clues live in the victim's description — every paragraph that starts with „Улика“:
+
+```
+Улика 1: Под саксията на терасата има ключ за избата.
+
+Улика 2: В избата мирише на бензин.
+```
+
+When the game moves to „Играта върви“, a 25-minute timer starts on the GM's dashboard (it is
+never sent to players). When it runs out it chimes, vibrates, keeps the screen awake and shows the
+next clue; „✓ Прочетох я“ starts the next 25 minutes. „Прочети по-рано“ stops the countdown to read
+a clue before time. The timer is kept on the server, so a refresh or a second GM device doesn't
+lose it. The interval is `CLUE_INTERVAL_MS` in `src/lib/format.ts`.
 
 The GM has a **👁️ Преглед** button to see the rendered card before saving.
 
@@ -34,19 +55,18 @@ The GM has a **👁️ Преглед** button to see the rendered card before s
 - Hand-written CSS, no UI framework
 - Identity is cookie-based: no accounts, no passwords. The GM's browser holds the game-master
   token; each player's browser holds a player token. Clearing cookies loses access to that role.
-- Clients poll `/api/games/:code/state` every 3–4s, so clue drops and phase changes land without
-  a refresh.
+- Clients poll `/api/games/:code/state` every 3–4s, so phase changes land without a refresh.
 
 ## Read-aloud (ElevenLabs)
 
-Set `ELEVENLABS_API_KEY` and a **🔊 Чуй** button appears next to the intro story and every clue,
-for the GM and for players. Without the key the buttons simply don't show.
+Set `ELEVENLABS_API_KEY` and a **🔊 Чуй** button appears next to the intro story (GM and players)
+and next to the clue on the GM's timer. Without the key the buttons simply don't show.
 
 - Each distinct text is synthesized once and cached as an mp3 in `$DATA_DIR/tts/`, so ten phones
   replaying a clue cost one API call. Editing a text generates a fresh file on next play.
-- A clue is synthesized in the background the moment the GM releases it, so players don't wait.
-- Players can only fetch audio for things they can already read (released clues addressed to them,
-  the intro once the game has left setup).
+- The next clue is synthesized in the background as soon as its 25 minutes start, so it plays
+  instantly when it's due.
+- Players can only fetch the intro, and only once the game has left setup. Clue audio is GM-only.
 - `ELEVENLABS_VOICE_ID` picks the voice (default: premade "George"); `ELEVENLABS_MODEL_ID`
   defaults to `eleven_multilingual_v2`, which handles Bulgarian. The intro is capped at 10 000
   characters, the model's per-request limit.
@@ -129,16 +149,16 @@ and a player's payload never contains another character's secret.
 | `POST` | `/api/games/:code/claim` | player → claim / release a character |
 | `POST` | `/api/games/:code/vote` | player → accuse (only during `voting`) |
 | `DELETE` | `/api/games/:code/vote` | GM → clear the tally |
-| `PATCH` | `/api/games/:code` | GM → title, phase, intro, solution |
+| `PATCH` | `/api/games/:code` | GM → title, phase, intro, solution, `clueRead`, `resetClues` |
 | `POST` `PATCH` `DELETE` | `/api/games/:code/characters[/:id]` | GM |
-| `POST` `PATCH` `DELETE` | `/api/games/:code/clues[/:id]` | GM |
 | `GET` | `/api/games/:code/audio/intro` | GM, or a player once past setup → mp3 |
-| `GET` | `/api/games/:code/audio/clues/:id` | GM, or a player the clue is released to → mp3 |
+| `GET` | `/api/games/:code/audio/clue/:n` | GM → the victim's clue `n` as mp3 |
 | `GET` | `/api/health` | anyone |
 
 ## Data model
 
-`games` → `characters`, `players`, `clues`, `votes`. A player row holds a nullable
+`games` → `characters`, `players`, `votes`. The clue timer is two columns on `games`
+(`clue_round_started_at`, `clues_read`); the victim is `characters.is_victim`. A player row holds a nullable
 `character_id`; a unique index on it enforces that two people can't claim the same role.
 Schema is applied idempotently on boot (`src/lib/db.ts`) — no migration step to run. Databases
 from before the plain-text characters get their old sections (and role / pair lines) folded into

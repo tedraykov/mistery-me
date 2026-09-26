@@ -297,6 +297,70 @@ textarea {
   text-transform: uppercase;
 }
 
+/* ── Clue timer (victim only) ──────────────────────────────────── */
+.timer-panel {
+  border-color: #453b63;
+}
+.timer-clock {
+  font-family: var(--mono);
+  font-size: clamp(34px, 10vw, 48px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+}
+.timer-over {
+  font-size: 0.5em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.timer-paused {
+  color: var(--muted);
+  font-size: clamp(26px, 7vw, 34px);
+}
+.timer-due {
+  border-color: var(--amber);
+  animation: timer-pulse 1.8s ease-in-out infinite;
+}
+.timer-due .timer-clock {
+  color: var(--amber);
+  font-family: var(--serif);
+  letter-spacing: 0;
+}
+@keyframes timer-pulse {
+  0%,
+  100% {
+    box-shadow: var(--shadow), 0 0 0 0 rgba(226, 169, 74, 0);
+  }
+  50% {
+    box-shadow: var(--shadow), 0 0 0 6px rgba(226, 169, 74, 0.18);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timer-due {
+    animation: none;
+  }
+}
+.clue-now {
+  padding: 12px 14px;
+  border-left: 3px solid var(--amber);
+  background: rgba(226, 169, 74, 0.06);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* The victim's clues inside their card. */
+.clue-para {
+  padding: 8px 12px;
+  border-left: 3px solid var(--line);
+  border-radius: 0 6px 6px 0;
+}
+.clue-read {
+  color: var(--faint);
+}
+.clue-next {
+  border-left-color: var(--amber);
+  background: rgba(226, 169, 74, 0.06);
+}
+
 /* ── Phase stepper ─────────────────────────────────────────────── */
 .phases {
   list-style: none;
@@ -527,6 +591,13 @@ textarea {
   font-family: var(--serif);
   font-size: 16px;
   font-weight: 600;
+}
+.cast-row {
+  flex-wrap: wrap;
+}
+/* On narrow screens the actions drop below the name instead of overlapping the badges. */
+.cast-row > :last-child {
+  margin-left: auto;
 }
 .pick-item .nm {
   font-family: var(--serif);

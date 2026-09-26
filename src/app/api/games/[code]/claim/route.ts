@@ -30,6 +30,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
       game.id,
     );
     if (!character) throw new HttpError(404, "Няма такъв герой");
+    if (character.is_victim) {
+      throw new HttpError(409, `„${character.name}“ е убитият — него го играе водещият`);
+    }
 
     const takenBy = get<{ id: string }>(
       "SELECT id FROM players WHERE character_id = ?",

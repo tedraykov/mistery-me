@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS games (
   phase       TEXT NOT NULL DEFAULT 'setup',
   solution    TEXT NOT NULL DEFAULT '',
   intro       TEXT NOT NULL DEFAULT '',
+  -- Clue timer: when the current 25-minute round started (NULL until the game is played),
+  -- and how many of the victim's clues have been read so far.
+  clue_round_started_at INTEGER,
+  clues_read  INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );
@@ -21,6 +25,7 @@ CREATE TABLE IF NOT EXISTS characters (
   name        TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   is_culprit  INTEGER NOT NULL DEFAULT 0,
+  is_victim   INTEGER NOT NULL DEFAULT 0,
   sort_order  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_characters_game ON characters(game_id);
@@ -36,18 +41,6 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE INDEX IF NOT EXISTS idx_players_game ON players(game_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_players_token ON players(game_id, token);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_players_character ON players(character_id);
-
-CREATE TABLE IF NOT EXISTS clues (
-  id            TEXT PRIMARY KEY,
-  game_id       TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-  title         TEXT NOT NULL DEFAULT '',
-  body          TEXT NOT NULL DEFAULT '',
-  target        TEXT NOT NULL DEFAULT 'all',
-  released_at   INTEGER,
-  sort_order    INTEGER NOT NULL DEFAULT 0,
-  created_at    INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_clues_game ON clues(game_id);
 
 CREATE TABLE IF NOT EXISTS votes (
   game_id       TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
@@ -72,6 +65,13 @@ function hasColumn(db: DatabaseSync, table: string, column: string): boolean {
 function migrate(db: DatabaseSync): void {
   if (!hasColumn(db, "games", "intro")) {
     db.exec("ALTER TABLE games ADD COLUMN intro TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, "games", "clue_round_started_at")) {
+    db.exec("ALTER TABLE games ADD COLUMN clue_round_started_at INTEGER");
+    db.exec("ALTER TABLE games ADD COLUMN clues_read INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!hasColumn(db, "characters", "is_victim")) {
+    db.exec("ALTER TABLE characters ADD COLUMN is_victim INTEGER NOT NULL DEFAULT 0");
   }
 
   // Characters used to have five structured sections; they are now one plain text. Fold the old
@@ -144,6 +144,15 @@ export function get<T>(sql: string, ...params: unknown[]): T | undefined {
 
 export function run(sql: string, ...params: unknown[]): void {
   db().prepare(sql).run(...(params as never[]));
+}
+
+/**
+ * Make `characterId` the game's one victim. The victim is played by the game master, so any player
+ * who had picked that role is released from it.
+ */
+export function makeVictim(gameId: string, characterId: string): void {
+  run("UPDATE characters SET is_victim = (id = ?) WHERE game_id = ?", characterId, gameId);
+  run("UPDATE players SET character_id = NULL WHERE character_id = ?", characterId);
 }
 
 export function touchGame(gameId: string): void {
